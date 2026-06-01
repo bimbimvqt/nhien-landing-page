@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
+const isDev = process.env.NODE_ENV === 'development';
+const s3Endpoint = (isDev ? process.env.CDN_S3_ENDPOINT : process.env.CDN_S3_INTERNAL_ENDPOINT) || process.env.CDN_S3_ENDPOINT;
+
 const s3Client = new S3Client({
-  endpoint: process.env.CDN_S3_INTERNAL_ENDPOINT || process.env.CDN_S3_ENDPOINT,
+  endpoint: s3Endpoint,
   region: process.env.CDN_S3_REGION || 'us-east-1',
   credentials: {
     accessKeyId: process.env.CDN_S3_ACCESS_KEY || '',

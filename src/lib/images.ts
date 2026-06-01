@@ -1,1 +1,1 @@
-export const DEFAULT_PRODUCT_IMAGE = "/images/image-transparent.png";
+export const DEFAULT_PRODUCT_IMAGE = "/images/image-transparant.png";
