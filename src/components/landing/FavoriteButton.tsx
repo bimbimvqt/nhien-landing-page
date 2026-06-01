@@ -39,33 +39,33 @@ export default function FavoriteButton({
     }
 
     setLoading(true);
-    const { data, error } = await supabase
-      .from("favorites")
-      .select("id")
-      .eq("user_id", currentUserId)
-      .eq("product_id", productId)
-      .maybeSingle();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
 
-    if (error) {
-      if (error.code !== "PGRST205") {
-        console.error("Error loading favorite:", error);
-      }
+      const res = await fetch('/api/me/engagement', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) throw new Error('Failed to load favorites');
+      
+      const data = await res.json();
+      const fav = data.favorites?.find((f: any) => f.product_id === productId);
+      setFavoriteId(fav ? fav.id : null);
+      setUnavailable(false);
+    } catch (error) {
+      console.error("Error loading favorite:", error);
       setUnavailable(true);
       setFavoriteId(null);
-    } else {
-      setUnavailable(false);
-      setFavoriteId(data?.id ?? null);
     }
-
     setLoading(false);
   }, [productId]);
 
   React.useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      const currentUserId = data.user?.id ?? null;
+      const currentUserId = data.session?.user?.id ?? null;
       setUserId(currentUserId);
       void loadFavorite(currentUserId);
     });
@@ -99,35 +99,43 @@ export default function FavoriteButton({
 
     setSaving(true);
 
-    if (favoriteId) {
-      const { error } = await supabase
-        .from("favorites")
-        .delete()
-        .eq("id", favoriteId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        openLoginDialog();
+        setSaving(false);
+        return;
+      }
 
-      if (error) {
-        console.error("Error removing favorite:", error);
-      } else {
+      if (favoriteId) {
+        const res = await fetch(`/api/me/favorites?product_id=${productId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        });
+
+        if (!res.ok) throw new Error('Error removing favorite');
         setFavoriteId(null);
         notifyFavoriteChanged();
-      }
-    } else {
-      const { data, error } = await supabase
-        .from("favorites")
-        .upsert(
-          { user_id: userId, product_id: productId },
-          { onConflict: "user_id,product_id" },
-        )
-        .select("id")
-        .single();
-
-      if (error) {
-        console.error("Error saving favorite:", error);
-        setUnavailable(true);
       } else {
+        const res = await fetch('/api/me/favorites', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ product_id: productId })
+        });
+
+        if (!res.ok) {
+          throw new Error('Error saving favorite');
+        }
+        const data = await res.json();
         setFavoriteId(data.id);
         notifyFavoriteChanged();
       }
+    } catch (error) {
+      console.error(error);
+      setUnavailable(true);
     }
 
     setSaving(false);

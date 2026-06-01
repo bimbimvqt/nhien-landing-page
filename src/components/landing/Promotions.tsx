@@ -94,46 +94,41 @@ export default function Promotions({ settings }: PromotionsProps) {
       return;
     }
 
-    const [{ count: favoritesCount }, completionsResult, claimsResult] = await Promise.all([
-      supabase
-        .from('favorites')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', currentUser.id),
-      supabase
-        .from('user_task_completions')
-        .select('task_key')
-        .eq('user_id', currentUser.id),
-      supabase
-        .from('promotion_claims')
-        .select('id, promotion_id, code_snapshot, claimed_at, redeemed_count, remaining_uses, redeemed_at')
-        .eq('user_id', currentUser.id),
-    ]);
-
-    if (completionsResult.error || claimsResult.error) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      
+      const res = await fetch('/api/me/engagement', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) {
+        throw new Error('Failed to load engagement');
+      }
+      
+      const data = await res.json();
+      setFavoriteCount(data.favorites?.length || 0);
+      setCompletedTaskKeys((data.completed_tasks || []).filter((key: any): key is RewardTaskKey =>
+        REWARD_TASKS.some((task) => task.key === key)
+      ));
+      setClaims(data.claims || []);
+    } catch (e) {
+      console.error(e);
       setError('Cần chạy migration customer engagement để bật nhận mã.');
-      return;
     }
-
-    setFavoriteCount(favoritesCount || 0);
-    setCompletedTaskKeys(
-      (completionsResult.data || [])
-        .map((row) => row.task_key)
-        .filter((key): key is RewardTaskKey =>
-          REWARD_TASKS.some((task) => task.key === key),
-        ),
-    );
-    setClaims(claimsResult.data || []);
   }, []);
+
+  const userRef = React.useRef<User | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       if (!mounted) {
         return;
       }
-      setUser(data.user);
-      void loadUserEngagement(data.user);
+      userRef.current = data.session?.user ?? null;
+      setUser(data.session?.user ?? null);
+      void loadUserEngagement(data.session?.user ?? null);
     });
 
     const {
@@ -143,12 +138,13 @@ export default function Promotions({ settings }: PromotionsProps) {
         return;
       }
       const currentUser = session?.user ?? null;
+      userRef.current = currentUser;
       setUser(currentUser);
       void loadUserEngagement(currentUser);
     });
 
     const handleFavoritesChanged = () => {
-      void loadUserEngagement(user);
+      void loadUserEngagement(userRef.current);
     };
 
     window.addEventListener('nhien:favorites-changed', handleFavoritesChanged);
@@ -158,7 +154,7 @@ export default function Promotions({ settings }: PromotionsProps) {
       subscription.unsubscribe();
       window.removeEventListener('nhien:favorites-changed', handleFavoritesChanged);
     };
-  }, [loadUserEngagement, user]);
+  }, [loadUserEngagement]);
 
   const completedKeys = useMemo(() => {
     const keys = new Set<RewardTaskKey>(completedTaskKeys);
@@ -227,20 +223,30 @@ export default function Promotions({ settings }: PromotionsProps) {
       window.open(settings.facebook_url, '_blank', 'noopener,noreferrer');
     }
 
-    const { error } = await supabase
-      .from('user_task_completions')
-      .upsert(
-        { user_id: user.id, task_key: task.key },
-        { onConflict: 'user_id,task_key' },
-      );
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-    if (error) {
-      setError(error.message);
-    } else {
+      const res = await fetch('/api/me/tasks', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ task_key: task.key })
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to complete task');
+      }
+      
       setCompletedTaskKeys((current) =>
         current.includes(task.key) ? current : [...current, task.key],
       );
       setMessage('Đã ghi nhận nhiệm vụ.');
+    } catch (e: any) {
+      setError(e.message);
     }
 
     setBusyKey(null);
@@ -261,28 +267,29 @@ export default function Promotions({ settings }: PromotionsProps) {
     setError(null);
     setMessage(null);
 
-    const { data, error } = await supabase
-      .from('promotion_claims')
-      .upsert(
-        {
-          user_id: user.id,
-          promotion_id: promotion.id,
-          code_snapshot: promotion.code,
-          remaining_uses: promotion.max_redemptions_per_user || 1,
-        },
-        { onConflict: 'user_id,promotion_id' },
-      )
-      .select('id, promotion_id, code_snapshot, claimed_at, redeemed_count, remaining_uses, redeemed_at')
-      .single();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setClaims((current) => [
-        ...current.filter((claim) => claim.promotion_id !== data.promotion_id),
-        data,
-      ]);
+      const res = await fetch('/api/me/claims', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ promotion_id: promotion.id })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to claim promotion');
+      }
+      
+      // refresh engagement
+      void loadUserEngagement(user);
       setMessage(`Đã nhận mã ${promotion.code}.`);
+    } catch (e: any) {
+      setError(e.message);
     }
 
     setBusyKey(null);

@@ -25,13 +25,10 @@ import React, { useEffect, useState } from "react";
 import { SeraGoogleLoginForm } from "@/components/auth/SeraGoogleLoginForm";
 import Navbar from "@/components/landing/Navbar";
 import { SeraButton, SeraLinkButton } from "@/components/sera/button";
-import {
-  getAuthRedirectUrl,
-  getUserAvatarUrl,
-  getUserDisplayName,
-  isAdminUser,
-} from "@/lib/auth";
+import { getAuthRedirectUrl, getUserAvatarUrl, getUserDisplayName, isAdminUser } from "@/lib/auth";
 import { REWARD_TASKS, type RewardTaskKey } from "@/lib/customerEngagement";
+import { getProxiedImageUrl } from "@/lib/image-proxy";
+import { DEFAULT_PRODUCT_IMAGE } from "@/lib/images";
 import { supabase } from "@/lib/supabaseClient";
 import type {
   Favorite,
@@ -95,80 +92,47 @@ export default function ProfilePage() {
     setProfileLoading(true);
     setProfileError(null);
 
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .upsert(
-          {
-            user_id: currentUser.id,
-            display_name: getUserDisplayName(currentUser),
-            email: currentUser.email || null,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        ),
-      supabase
-        .from("loyalty_accounts")
-        .upsert(
-          {
-            user_id: currentUser.id,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        ),
-    ]);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
 
-    const [
-      favoritesResult,
-      claimsResult,
-      completionsResult,
-      loyaltyAccountResult,
-      loyaltyTransactionsResult,
-    ] = await Promise.all([
-      supabase
-        .from("favorites")
-        .select("id, user_id, product_id, created_at, product:products(*)")
-        .eq("user_id", currentUser.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("promotion_claims")
-        .select("id, user_id, promotion_id, code_snapshot, claimed_at, redeemed_count, remaining_uses, redeemed_at, redeemed_by, redeem_note, promotion:promotions(*)")
-        .eq("user_id", currentUser.id)
-        .order("claimed_at", { ascending: false }),
-      supabase
-        .from("user_task_completions")
-        .select("task_key")
-        .eq("user_id", currentUser.id),
-      supabase
-        .from("loyalty_accounts")
-        .select("*")
-        .eq("user_id", currentUser.id)
-        .maybeSingle(),
-      supabase
-        .from("loyalty_transactions")
-        .select("*")
-        .eq("user_id", currentUser.id)
-        .order("created_at", { ascending: false })
-        .limit(5),
-    ]);
+      // Update profile first
+      const profileRes = await fetch('/api/me/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          display_name: getUserDisplayName(currentUser),
+          email: currentUser.email || ''
+        })
+      });
 
-    if (favoritesResult.error || claimsResult.error || completionsResult.error) {
-      setProfileError("Cần chạy migration customer engagement để hiển thị dữ liệu thành viên.");
-      setProfileLoading(false);
-      return;
+      if (!profileRes.ok) {
+        console.error('Failed to update profile');
+      }
+
+      // Fetch engagement
+      const res = await fetch('/api/me/engagement', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch engagement data');
+
+      const data = await res.json();
+      
+      setFavorites(data.favorites || []);
+      setClaims(data.claims || []);
+      setCompletedTaskKeys((data.completed_tasks || []).filter((key: any): key is RewardTaskKey =>
+        REWARD_TASKS.some((task) => task.key === key)
+      ));
+      setLoyaltyAccount(data.loyalty_account || null);
+      setLoyaltyTransactions(data.loyalty_transactions || []);
+    } catch (e: any) {
+      console.error(e);
+      setProfileError('Có lỗi xảy ra khi tải dữ liệu thành viên.');
     }
-
-    setFavorites((favoritesResult.data || []) as unknown as FavoriteWithProduct[]);
-    setClaims((claimsResult.data || []) as unknown as ClaimWithPromotion[]);
-    setCompletedTaskKeys(
-      (completionsResult.data || [])
-        .map((row) => row.task_key)
-        .filter((key): key is RewardTaskKey =>
-          REWARD_TASKS.some((task) => task.key === key),
-        ),
-    );
-    setLoyaltyAccount((loyaltyAccountResult.data as LoyaltyAccount | null) || null);
-    setLoyaltyTransactions((loyaltyTransactionsResult.data || []) as LoyaltyTransaction[]);
+    
     setProfileLoading(false);
   }, []);
 
@@ -443,14 +407,35 @@ export default function ProfilePage() {
                     {favorites.slice(0, 5).map((favorite) => (
                       <div
                         key={favorite.id}
-                        className="rounded-3xl bg-sera-cream p-4 text-sm"
+                        className="group flex items-center gap-4 rounded-3xl bg-sera-cream p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm"
                       >
-                        <span className="block font-black text-sera-ink">
-                          {favorite.product?.name || "Món đã lưu"}
-                        </span>
-                        <span className="mt-1 block text-sera-muted">
-                          {favorite.product?.category || "Thực đơn"} · {formatDate(favorite.created_at)}
-                        </span>
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-sera-surface">
+                          <Image
+                            src={getProxiedImageUrl(favorite.product?.image_url || DEFAULT_PRODUCT_IMAGE)}
+                            alt={favorite.product?.name || "Món yêu thích"}
+                            fill
+                            sizes="64px"
+                            className="object-cover transition-transform duration-500 group-hover:scale-110"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="truncate font-black text-sera-ink transition-colors">
+                            {favorite.product?.name || "Món đã lưu"}
+                          </h4>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="truncate text-xs font-bold uppercase tracking-wider text-sera-muted">
+                              {favorite.product?.category || "Thực đơn"}
+                            </span>
+                            {favorite.product?.price_s ? (
+                              <>
+                                <span className="text-sera-muted/50">·</span>
+                                <span className="text-sm font-bold text-sera-ember">
+                                  {new Intl.NumberFormat('vi-VN').format(favorite.product.price_s)}đ
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>

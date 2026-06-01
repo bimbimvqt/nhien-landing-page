@@ -79,6 +79,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/store-settings", s.getStoreSettings)
 	mux.HandleFunc("PUT /api/store-settings", s.updateStoreSettings)
 
+	mux.HandleFunc("GET /api/internal/users/{user_id}/engagement", s.getUserEngagement)
+	mux.HandleFunc("POST /api/internal/users/{user_id}/profile", s.updateProfile)
+	mux.HandleFunc("POST /api/internal/users/{user_id}/favorites", s.addFavorite)
+	mux.HandleFunc("DELETE /api/internal/users/{user_id}/favorites/{product_id}", s.removeFavorite)
+	mux.HandleFunc("POST /api/internal/users/{user_id}/claims", s.claimPromotion)
+	mux.HandleFunc("POST /api/internal/users/{user_id}/tasks", s.completeTask)
+
 	return s.withCORS(s.withLogging(mux))
 }
 
