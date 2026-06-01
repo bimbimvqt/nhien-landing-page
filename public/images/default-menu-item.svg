@@ -1,0 +1,13 @@
+<svg width="800" height="800" viewBox="0 0 800 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="800" fill="#FBF6EF"/>
+  <circle cx="400" cy="400" r="282" fill="#F0E1D2"/>
+  <circle cx="400" cy="400" r="214" fill="#FFFDF9"/>
+  <path d="M278 322C278 292.177 302.177 268 332 268H482C511.823 268 536 292.177 536 322V420C536 491.797 477.797 550 406 550C334.203 550 276 491.797 276 420V322H278Z" fill="#8E2E24"/>
+  <path d="M536 342H569C607.66 342 639 373.34 639 412C639 450.66 607.66 482 569 482H529" stroke="#8E2E24" stroke-width="34" stroke-linecap="round"/>
+  <path d="M318 312H494V420C494 468.601 454.601 508 406 508C357.399 508 318 468.601 318 420V312Z" fill="#B84A3B"/>
+  <path d="M358 236C348 217 350 197 366 178" stroke="#8B766A" stroke-width="18" stroke-linecap="round"/>
+  <path d="M416 236C406 217 408 197 424 178" stroke="#8B766A" stroke-width="18" stroke-linecap="round"/>
+  <path d="M474 236C464 217 466 197 482 178" stroke="#8B766A" stroke-width="18" stroke-linecap="round"/>
+  <rect x="254" y="584" width="292" height="28" rx="14" fill="#D6B8A4"/>
+  <text x="400" y="658" text-anchor="middle" fill="#8E2E24" font-family="Georgia, 'Times New Roman', serif" font-size="42" font-weight="700">Nhiên Cafe</text>
+</svg>
