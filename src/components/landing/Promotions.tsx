@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { SeraBadge } from '@/components/sera/badge';
 import { SeraButton, SeraLinkButton } from '@/components/sera/button';
 import { SeraSectionHeading } from '@/components/sera/section-heading';
+import { fetchActivePromotions } from '@/lib/backendApi';
 import {
   REWARD_TASKS,
   getPromotionStatus,
@@ -62,22 +63,21 @@ export default function Promotions({ settings }: PromotionsProps) {
   React.useEffect(() => {
     let mounted = true;
 
-    supabase
-      .from('promotions')
-      .select('*')
-      .eq('active', true)
-      .order('created_at', { ascending: false })
-      .limit(3)
-      .then(({ data, error }) => {
+    fetchActivePromotions(3)
+      .then((data) => {
         if (!mounted) {
           return;
         }
 
-        if (error) {
-          setError(error.message);
-        } else {
-          setPromotions(data || []);
+        setPromotions(data || []);
+        setLoading(false);
+      })
+      .catch((error: Error) => {
+        if (!mounted) {
+          return;
         }
+
+        setError(error.message);
         setLoading(false);
       });
 

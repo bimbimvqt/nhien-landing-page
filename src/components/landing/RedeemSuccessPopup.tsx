@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { AnimatePresence, motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import { PartyPopper, X } from "lucide-react";
@@ -8,52 +9,8 @@ import { supabase } from "@/lib/supabaseClient";
 
 export function RedeemSuccessPopup() {
   const [showPopup, setShowPopup] = useState(false);
-  const [promotionName, setPromotionName] = useState("Ưu đãi của bạn");
 
-  useEffect(() => {
-    let channel: any = null;
-
-    const setupListener = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-
-      channel = supabase
-        .channel("schema-db-changes")
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "promotion_claims",
-            filter: `user_id=eq.${session.user.id}`,
-          },
-          (payload) => {
-            const oldRecord = payload.old;
-            const newRecord = payload.new;
-            
-            // Check if it was just redeemed
-            if (
-              newRecord.redeemed_count > (oldRecord.redeemed_count || 0) ||
-              (newRecord.redeemed_at && newRecord.redeemed_at !== oldRecord.redeemed_at)
-            ) {
-              // Trigger success!
-              triggerSuccess();
-            }
-          }
-        )
-        .subscribe();
-    };
-
-    setupListener();
-
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
-    };
-  }, []);
-
-  const triggerSuccess = () => {
+  const triggerSuccess = React.useCallback(() => {
     setShowPopup(true);
     
     // Fire confetti
@@ -63,7 +20,7 @@ export function RedeemSuccessPopup() {
 
     const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
-    const interval: any = setInterval(function() {
+    const interval: ReturnType<typeof setInterval> = setInterval(function() {
       const timeLeft = animationEnd - Date.now();
 
       if (timeLeft <= 0) {
@@ -85,7 +42,54 @@ export function RedeemSuccessPopup() {
     setTimeout(() => {
       setShowPopup(false);
     }, 6000);
-  };
+  }, []);
+
+  useEffect(() => {
+    let channel: RealtimeChannel | null = null;
+
+    const setupListener = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      channel = supabase
+        .channel("schema-db-changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "promotion_claims",
+            filter: `user_id=eq.${session.user.id}`,
+          },
+          (payload) => {
+            const oldRecord = payload.old as {
+              redeemed_count?: number;
+              redeemed_at?: string | null;
+            };
+            const newRecord = payload.new as {
+              redeemed_count?: number;
+              redeemed_at?: string | null;
+            };
+
+            if (
+              (newRecord.redeemed_count || 0) > (oldRecord.redeemed_count || 0) ||
+              (newRecord.redeemed_at && newRecord.redeemed_at !== oldRecord.redeemed_at)
+            ) {
+              triggerSuccess();
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    setupListener();
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [triggerSuccess]);
 
   return (
     <AnimatePresence>

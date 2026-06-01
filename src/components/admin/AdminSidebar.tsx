@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, 
   Coffee, 
-  Image as ImageIcon, 
   PanelsTopLeft,
   Tag, 
   Settings, 

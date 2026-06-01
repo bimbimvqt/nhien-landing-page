@@ -45,6 +45,16 @@ docker compose logs -f web
 docker compose down
 ```
 
+### Migrate Supabase Data to Go/Postgres
+
+With the Compose stack running, migrate public Supabase data into the Go API/Postgres backend:
+
+```bash
+npm run migrate:supabase
+```
+
+The script migrates `store_settings`, `products`, and `promotions`. User auth/session data remains on the existing Supabase Auth flow until the auth layer is migrated separately.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

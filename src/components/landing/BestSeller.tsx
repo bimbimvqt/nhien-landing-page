@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import ProductCard from './ProductCard';
 import { Product } from '@/types';
-import { supabase } from '@/lib/supabaseClient';
+import { fetchProducts } from '@/lib/backendApi';
 import { SeraSectionHeading } from '@/components/sera/section-heading';
 
 const BestSeller = () => {
@@ -12,12 +12,8 @@ const BestSeller = () => {
 
   useEffect(() => {
     const fetchBestSellers = async () => {
-      const { data } = await supabase
-        .from('products')
-        .select('*')
-        .eq('is_best_seller', true)
-        .limit(4);
-      
+      const data = await fetchProducts({ bestSeller: true, limit: 4 }).catch(() => []);
+
       if (data && data.length > 0) {
         setBestSellers(data);
       } else {

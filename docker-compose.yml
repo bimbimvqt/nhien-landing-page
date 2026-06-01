@@ -1,4 +1,36 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nhien_cafe}
+      POSTGRES_USER: ${POSTGRES_USER:-nhien}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nhien_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    image: nhien-cafe-api:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-nhien}:${POSTGRES_PASSWORD:-nhien_dev_password}@db:5432/${POSTGRES_DB:-nhien_cafe}?sslmode=disable}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+
   web:
     build:
       context: .
@@ -6,16 +38,24 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
         NEXT_PUBLIC_ADMIN_EMAILS: ${NEXT_PUBLIC_ADMIN_EMAILS:-}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
     image: nhien-cafe-landing-page:latest
     restart: unless-stopped
+    depends_on:
+      - api
     ports:
       - "${APP_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       PORT: 3000
+      API_INTERNAL_URL: http://api:8080
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
       NEXT_PUBLIC_ADMIN_EMAILS: ${NEXT_PUBLIC_ADMIN_EMAILS:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MENU_IMPORT_MODEL: ${OPENAI_MENU_IMPORT_MODEL:-gpt-5.4-mini}
+
+volumes:
+  postgres_data:

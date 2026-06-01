@@ -6,7 +6,8 @@
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate:supabase": "node scripts/migrate-supabase-to-go-api.mjs --env-file .env.local"
   },
   "dependencies": {
     "@netlify/plugin-nextjs": "^5.15.11",

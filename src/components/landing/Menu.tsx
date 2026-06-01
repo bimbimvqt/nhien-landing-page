@@ -17,8 +17,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { fetchProducts } from '@/lib/backendApi';
 import { DEFAULT_PRODUCT_IMAGE } from '@/lib/images';
-import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
 import type { Category, Product } from '@/types';
 
@@ -36,24 +36,23 @@ const Menu = () => {
   useEffect(() => {
     let isActive = true;
 
-    supabase
-      .from('products')
-      .select('*')
-      .order('category', { ascending: true })
-      .order('is_best_seller', { ascending: false })
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
+    fetchProducts()
+      .then((data) => {
         if (!isActive) {
           return;
         }
 
-        if (error) {
-          console.error('Error fetching products:', error);
-          setError(error.message);
-          setProducts([]);
-        } else {
-          setProducts(data || []);
+        setProducts(data || []);
+        setLoading(false);
+      })
+      .catch((error: Error) => {
+        if (!isActive) {
+          return;
         }
+
+        console.error('Error fetching products:', error);
+        setError(error.message);
+        setProducts([]);
         setLoading(false);
       });
 

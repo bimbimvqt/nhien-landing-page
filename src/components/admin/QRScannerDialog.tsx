@@ -88,7 +88,7 @@ export function QRScannerDialog({ isOpen, onClose, onScan }: QRScannerDialogProp
         }
         onScan(decodedText);
         onClose();
-      } catch (err) {
+      } catch {
         setErrorMsg("Không tìm thấy mã QR trong ảnh này. Vui lòng thử ảnh khác.");
       }
     }

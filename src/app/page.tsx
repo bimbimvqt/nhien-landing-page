@@ -8,23 +8,19 @@ import Gallery from '@/components/landing/Gallery';
 import Footer from '@/components/landing/Footer';
 import FloatingActions from '@/components/landing/FloatingActions';
 import Promotions from '@/components/landing/Promotions';
-import { supabase } from '@/lib/supabaseClient';
+import { fetchStoreSettings } from '@/lib/backendApi';
 import { normalizeStoreSettings } from '@/lib/storeSettings';
 
 async function getStoreSettings() {
   await connection();
 
-  const { data, error } = await supabase
-    .from('store_settings')
-    .select('brand_name, hotline, address, facebook_url, instagram_url, map_embed_url, hero_image_url, opening_hours, updated_at')
-    .eq('id', 1)
-    .maybeSingle();
-
-  if (error) {
+  try {
+    return normalizeStoreSettings(await fetchStoreSettings());
+  } catch (error) {
     console.error('Error fetching store settings:', error);
   }
 
-  return normalizeStoreSettings(data);
+  return normalizeStoreSettings(null);
 }
 
 export default async function LandingPage() {
