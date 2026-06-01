@@ -12,7 +12,10 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
     networks:
-      - nhien_network
+      nhien_network:
+      nginx_proxy:
+        aliases:
+          - nhien-api
 
   web:
     build:
@@ -21,20 +24,20 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
         NEXT_PUBLIC_ADMIN_EMAILS: ${NEXT_PUBLIC_ADMIN_EMAILS:-}
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
         API_INTERNAL_URL: http://api:8080
     image: nhien-cafe-landing-page:latest
     restart: unless-stopped
     depends_on:
       - api
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       PORT: 3000
       API_INTERNAL_URL: http://api:8080
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
       NEXT_PUBLIC_ADMIN_EMAILS: ${NEXT_PUBLIC_ADMIN_EMAILS:-}
@@ -49,8 +52,14 @@ services:
       CDN_S3_FORCE_PATH_STYLE: ${CDN_S3_FORCE_PATH_STYLE:-}
       CDN_PUBLIC_BASE_URL: ${CDN_PUBLIC_BASE_URL:-}
     networks:
-      - nhien_network
+      nhien_network:
+      nginx_proxy:
+        aliases:
+          - nhien-web
 
 networks:
   nhien_network:
     driver: bridge
+  nginx_proxy:
+    external: true
+    name: nginx-manager_default

@@ -1,16 +1,61 @@
 import type { Product, Promotion, StoreSettings } from '@/types';
 
 const DEFAULT_PUBLIC_API_BASE_URL = 'http://localhost:8080';
+const LOCALHOST_NAMES = new Set(['localhost', '127.0.0.1', '::1']);
+
+function normalizeBaseUrl(baseUrl: string) {
+  return baseUrl.replace(/\/$/, '');
+}
+
+function isLocalhostUrl(baseUrl: string) {
+  try {
+    return LOCALHOST_NAMES.has(new URL(baseUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isBrowserOnLocalhost() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return LOCALHOST_NAMES.has(window.location.hostname);
+}
+
+function isSameBrowserHostname(baseUrl: string) {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    return new URL(baseUrl).hostname === window.location.hostname;
+  } catch {
+    return false;
+  }
+}
 
 function getServerApiBaseUrl() {
   if (process.env.NODE_ENV !== 'production') {
-    return process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_PUBLIC_API_BASE_URL;
+    return normalizeBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_PUBLIC_API_BASE_URL);
   }
-  return process.env.API_INTERNAL_URL || 'http://api:8080';
+  return normalizeBaseUrl(process.env.API_INTERNAL_URL || 'http://api:8080');
 }
 
 function getBrowserApiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_PUBLIC_API_BASE_URL;
+  const configuredBaseUrl = normalizeBaseUrl(
+    process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_PUBLIC_API_BASE_URL,
+  );
+
+  if (
+    process.env.NODE_ENV === 'production' &&
+    ((isLocalhostUrl(configuredBaseUrl) && !isBrowserOnLocalhost()) ||
+      isSameBrowserHostname(configuredBaseUrl))
+  ) {
+    return '';
+  }
+
+  return configuredBaseUrl;
 }
 
 async function requestJSON<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {

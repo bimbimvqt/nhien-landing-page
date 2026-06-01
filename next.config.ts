@@ -15,9 +15,28 @@ function getSupabaseHostname() {
 }
 
 const supabaseHostname = getSupabaseHostname();
+const backendUrl =
+  process.env.API_INTERNAL_URL ||
+  (process.env.NODE_ENV === 'production' ? 'http://api:8080' : 'http://localhost:8080');
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  async rewrites() {
+    return [
+      {
+        source: '/api/products',
+        destination: `${backendUrl}/api/products`,
+      },
+      {
+        source: '/api/promotions',
+        destination: `${backendUrl}/api/promotions`,
+      },
+      {
+        source: '/api/store-settings',
+        destination: `${backendUrl}/api/store-settings`,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {
