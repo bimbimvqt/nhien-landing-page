@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
-// In development on host machine, we might not be able to resolve internal docker DNS
 const isDev = process.env.NODE_ENV === 'development';
-const s3Endpoint = (isDev ? process.env.CDN_S3_ENDPOINT : process.env.CDN_S3_INTERNAL_ENDPOINT) || process.env.CDN_S3_ENDPOINT;
+// Default to the public endpoint. Only use internal if explicitly set and we're in production.
+const s3Endpoint = process.env.CDN_S3_ENDPOINT || 'https://cdn.skytruong.com';
 
 const s3Client = new S3Client({
   endpoint: s3Endpoint,
