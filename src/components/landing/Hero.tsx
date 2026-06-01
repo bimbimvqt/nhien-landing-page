@@ -5,17 +5,20 @@ import { motion } from 'framer-motion';
 import { SeraBadge } from '@/components/sera/badge';
 import { SeraButton } from '@/components/sera/button';
 
+import { getProxiedImageUrl } from '@/lib/image-proxy';
+
 type HeroProps = {
   backgroundImageUrl: string;
 };
 
 const Hero = ({ backgroundImageUrl }: HeroProps) => {
+  const safeImageUrl = getProxiedImageUrl(backgroundImageUrl);
   return (
     <section id="home" className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat z-0"
         style={{ 
-          backgroundImage: `url("${backgroundImageUrl}")`,
+          backgroundImage: `url("${safeImageUrl}")`,
         }}
       >
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(39,32,28,0.82),rgba(39,32,28,0.42),rgba(39,32,28,0.18))] z-10" />

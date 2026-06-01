@@ -22,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabaseClient';
+import { getProxiedImageUrl } from '@/lib/image-proxy';
 
 const DEFAULT_HERO_BACKGROUND =
   'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop';
@@ -134,37 +135,22 @@ export default function HeroSettingsPage() {
       return imageUrl.trim() || null;
     }
 
-    const extension = selectedImageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const safeName =
-      selectedImageFile.name
-        .replace(/\.[^/.]+$/, '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-zA-Z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .toLowerCase() || 'hero';
-    const uniqueId =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const filePath = `hero/${uniqueId}-${safeName}.${extension}`;
+    const formData = new FormData();
+    formData.append('file', selectedImageFile);
+    formData.append('folder', 'hero');
 
-    const { error } = await supabase.storage
-      .from(HERO_IMAGE_BUCKET)
-      .upload(filePath, selectedImageFile, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+    const response = await fetch('/api/admin/upload', {
+      method: 'POST',
+      body: formData,
+    });
 
-    if (error) {
-      throw new Error(`Không thể upload ảnh: ${error.message}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Không thể upload ảnh: ${errorData.error || response.statusText}`);
     }
 
-    const { data } = supabase.storage
-      .from(HERO_IMAGE_BUCKET)
-      .getPublicUrl(filePath);
-
-    return data.publicUrl;
+    const data = await response.json();
+    return data.url;
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -263,7 +249,7 @@ export default function HeroSettingsPage() {
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={previewUrl}
+                  src={getProxiedImageUrl(previewUrl)}
                   alt="Hero preview"
                   className="h-full w-full object-cover"
                 />

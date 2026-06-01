@@ -8,6 +8,8 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import FavoriteButton from "./FavoriteButton";
 
+import { getProxiedImageUrl } from "@/lib/image-proxy";
+
 interface ProductCardProps {
   product: Product;
 }
@@ -16,6 +18,8 @@ const ProductCard = ({ product }: ProductCardProps) => {
   const description =
     product.description ||
     "Hương vị thơm ngon, tự nhiên đặc trưng của Nhiên CàFe.";
+
+  const safeImageUrl = getProxiedImageUrl(product.image_url || DEFAULT_PRODUCT_IMAGE);
 
   return (
     <motion.div
@@ -29,7 +33,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
       <SeraMagicCard className="h-full">
         <div className="relative aspect-square overflow-hidden">
           <Image
-            src={product.image_url || DEFAULT_PRODUCT_IMAGE}
+            src={safeImageUrl}
             alt={product.name}
             fill
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"

@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
+import { getProxiedImageUrl } from "@/lib/image-proxy";
 
 const PRODUCT_IMAGE_BUCKET = "product-images";
 const DEFAULT_CATEGORIES: Category[] = [
@@ -220,41 +221,26 @@ const MenuPage = () => {
     setUploadingImage(true);
     setImageUploadError(null);
 
-    const file = selectedImageFile;
-    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const safeName =
-      file.name
-        .replace(/\.[^/.]+$/, "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .toLowerCase() || "product";
-    const uniqueId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const filePath = `menu/${uniqueId}-${safeName}.${extension}`;
+    const payload = new FormData();
+    payload.append('file', selectedImageFile);
+    payload.append('folder', 'menu');
 
-    const { error } = await supabase.storage
-      .from(PRODUCT_IMAGE_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+    const response = await fetch('/api/admin/upload', {
+      method: 'POST',
+      body: payload,
+    });
 
-    if (error) {
-      setImageUploadError(`Không thể upload ảnh: ${error.message}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = `Không thể upload ảnh: ${errorData.error || response.statusText}`;
+      setImageUploadError(errorMsg);
       setUploadingImage(false);
-      throw error;
+      throw new Error(errorMsg);
     }
 
-    const { data } = supabase.storage
-      .from(PRODUCT_IMAGE_BUCKET)
-      .getPublicUrl(filePath);
-
+    const data = await response.json();
     setUploadingImage(false);
-    return data.publicUrl;
+    return data.url;
   };
 
   const handleMenuImageSelect = (file: File) => {
@@ -560,7 +546,7 @@ const MenuPage = () => {
                         <TableCell className="pl-8 py-4">
                           <div className="h-14 w-14 overflow-hidden rounded-2xl border-2 border-border/50 bg-muted/20 group-hover:border-primary/30 transition-all shadow-sm">
                             <Image
-                              src={product.image_url || DEFAULT_PRODUCT_IMAGE}
+                              src={getProxiedImageUrl(product.image_url || DEFAULT_PRODUCT_IMAGE)}
                               alt={product.name}
                               width={56}
                               height={56}
@@ -815,7 +801,7 @@ const MenuPage = () => {
                   <div className="relative aspect-square overflow-hidden rounded-3xl border border-border bg-muted/20">
                     {imagePreviewUrl ? (
                       <Image
-                        src={imagePreviewUrl}
+                        src={getProxiedImageUrl(imagePreviewUrl)}
                         alt={formData.name || "Ảnh món"}
                         fill
                         unoptimized={imagePreviewUrl.startsWith("blob:")}

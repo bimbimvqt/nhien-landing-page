@@ -58,20 +58,22 @@ const menuImportSchema = {
 };
 
 function getOutputText(response: unknown) {
+  const choices = (response as { choices?: Array<{ message?: { content?: string } }> }).choices;
+  if (choices && choices.length > 0 && choices[0].message?.content) {
+    return choices[0].message.content;
+  }
+  
+  // Fallback if the proxy returns a raw output_text
   if (
     typeof response === 'object' &&
     response !== null &&
     'output_text' in response &&
-    typeof response.output_text === 'string'
+    typeof (response as any).output_text === 'string'
   ) {
-    return response.output_text;
+    return (response as any).output_text;
   }
 
-  const output = (response as { output?: Array<{ content?: Array<{ text?: string }> }> }).output;
-  return output
-    ?.flatMap((item) => item.content || [])
-    .map((content) => content.text)
-    .find((text): text is string => typeof text === 'string');
+  return null;
 }
 
 function normalizePrice(value: number | null) {
@@ -121,20 +123,22 @@ export async function POST(request: Request) {
   const imageBuffer = Buffer.from(await file.arrayBuffer());
   const imageDataUrl = `data:${file.type};base64,${imageBuffer.toString('base64')}`;
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
+  const baseUrl = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1';
+  
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MENU_IMPORT_MODEL || 'gpt-5.4-mini',
-      input: [
+      model: process.env.OPENAI_MENU_IMPORT_MODEL || 'gpt-4o-mini',
+      messages: [
         {
           role: 'user',
           content: [
             {
-              type: 'input_text',
+              type: 'text',
               text: [
                 'Bạn là hệ thống nhập liệu menu cho quán cafe Việt Nam.',
                 'Hãy đọc ảnh menu và trích xuất toàn bộ món uống/món ăn nhìn thấy được.',
@@ -147,15 +151,17 @@ export async function POST(request: Request) {
               ].join(' '),
             },
             {
-              type: 'input_image',
-              image_url: imageDataUrl,
+              type: 'image_url',
+              image_url: {
+                url: imageDataUrl,
+              },
             },
           ],
         },
       ],
-      text: {
-        format: {
-          type: 'json_schema',
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
           name: 'menu_import',
           strict: true,
           schema: menuImportSchema,
