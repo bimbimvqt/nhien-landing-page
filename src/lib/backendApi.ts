@@ -3,7 +3,10 @@ import type { Product, Promotion, StoreSettings } from '@/types';
 const DEFAULT_PUBLIC_API_BASE_URL = 'http://localhost:8080';
 
 function getServerApiBaseUrl() {
-  return process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_PUBLIC_API_BASE_URL;
+  if (process.env.NODE_ENV !== 'production') {
+    return process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_PUBLIC_API_BASE_URL;
+  }
+  return process.env.API_INTERNAL_URL || 'http://api:8080';
 }
 
 function getBrowserApiBaseUrl() {

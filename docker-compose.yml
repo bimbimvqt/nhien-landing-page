@@ -13,6 +13,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    networks:
+      - nhien_network
 
   web:
     build:
@@ -22,6 +24,7 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
         NEXT_PUBLIC_ADMIN_EMAILS: ${NEXT_PUBLIC_ADMIN_EMAILS:-}
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+        API_INTERNAL_URL: http://api:8080
     image: nhien-cafe-landing-page:latest
     restart: unless-stopped
     depends_on:
@@ -39,4 +42,17 @@ services:
       NEXT_PUBLIC_ADMIN_EMAILS: ${NEXT_PUBLIC_ADMIN_EMAILS:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MENU_IMPORT_MODEL: ${OPENAI_MENU_IMPORT_MODEL:-gpt-5.4-mini}
+      CDN_S3_ENDPOINT: ${CDN_S3_ENDPOINT:-}
+      CDN_S3_INTERNAL_ENDPOINT: ${CDN_S3_INTERNAL_ENDPOINT:-}
+      CDN_S3_BUCKET: ${CDN_S3_BUCKET:-}
+      CDN_S3_REGION: ${CDN_S3_REGION:-}
+      CDN_S3_ACCESS_KEY: ${CDN_S3_ACCESS_KEY:-}
+      CDN_S3_SECRET_KEY: ${CDN_S3_SECRET_KEY:-}
+      CDN_S3_FORCE_PATH_STYLE: ${CDN_S3_FORCE_PATH_STYLE:-}
+      CDN_PUBLIC_BASE_URL: ${CDN_PUBLIC_BASE_URL:-}
+    networks:
+      - nhien_network
 
+networks:
+  nhien_network:
+    driver: bridge
