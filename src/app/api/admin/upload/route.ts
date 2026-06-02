@@ -1,61 +1,49 @@
 import { NextResponse } from 'next/server';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { verifyUser, getServerApiBaseUrl } from '@/app/api/me/util';
+import { isAdminUser } from '@/lib/auth';
 
-const isDev = process.env.NODE_ENV === 'development';
-const s3Endpoint = (isDev ? process.env.CDN_S3_ENDPOINT : process.env.CDN_S3_INTERNAL_ENDPOINT) || process.env.CDN_S3_ENDPOINT;
-
-const s3Client = new S3Client({
-  endpoint: s3Endpoint,
-  region: process.env.CDN_S3_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.CDN_S3_ACCESS_KEY || '',
-    secretAccessKey: process.env.CDN_S3_SECRET_KEY || '',
-  },
-  forcePathStyle: process.env.CDN_S3_FORCE_PATH_STYLE === 'true',
-});
-
+/**
+ * Proxies file uploads to the Go backend (/api/admin/upload),
+ * which has internal Docker network access to MinIO.
+ *
+ * This avoids the need for Next.js to reach MinIO directly
+ * (MinIO internal port is not publicly accessible).
+ */
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const bucket = formData.get('bucket') as string;
-    const folder = formData.get('folder') as string || '';
-
-    if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+    // Verify admin session
+    const user = await verifyUser(request);
+    if (!user || !isAdminUser(user)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const bucketName = bucket || process.env.CDN_S3_BUCKET || 'nhien-coffee';
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    
-    const safeName = file.name
-      .replace(/\.[^/.]+$/, '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .toLowerCase() || 'upload';
-      
-    const uniqueId = crypto.randomUUID();
-    const filePath = folder ? `${folder}/${uniqueId}-${safeName}.${extension}` : `${uniqueId}-${safeName}.${extension}`;
+    // Forward multipart/form-data as-is to Go backend
+    const formData = await request.formData();
+    const backendUrl = getServerApiBaseUrl();
 
-    const command = new PutObjectCommand({
-      Bucket: bucketName,
-      Key: filePath,
-      Body: buffer,
-      ContentType: file.type,
-      CacheControl: 'max-age=3600',
+    const res = await fetch(`${backendUrl}/api/admin/upload`, {
+      method: 'POST',
+      headers: {
+        'X-Admin-API-Key': process.env.ADMIN_API_KEY || 'change_me',
+      },
+      body: formData,
     });
 
-    await s3Client.send(command);
+    const data = await res.json().catch(() => ({}));
 
-    const baseUrl = process.env.CDN_PUBLIC_BASE_URL || 'https://cdn.skytruong.com';
-    const publicUrl = `${baseUrl}/${bucketName}/${filePath}`;
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: data.error || 'Upload failed' },
+        { status: res.status },
+      );
+    }
 
-    return NextResponse.json({ url: publicUrl, path: filePath });
+    return NextResponse.json(data);
   } catch (error: any) {
-    console.error('Upload error:', error);
-    return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 });
+    console.error('Upload proxy error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Upload failed' },
+      { status: 500 },
+    );
   }
 }

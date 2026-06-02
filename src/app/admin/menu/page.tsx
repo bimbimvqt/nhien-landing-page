@@ -34,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { supabase } from "@/lib/supabaseClient";
+
 import { cn } from "@/lib/utils";
 import { Category, Product } from "@/types";
 import {
@@ -57,6 +57,7 @@ import {
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { getProxiedImageUrl } from "@/lib/image-proxy";
+import { fetchAdminApi } from '@/lib/adminApi';
 
 const PRODUCT_IMAGE_BUCKET = "product-images";
 const DEFAULT_CATEGORIES: Category[] = [
@@ -120,13 +121,14 @@ const MenuPage = () => {
   }, [products]);
 
   const fetchProducts = React.useCallback(async () => {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) console.error("Error fetching products:", error);
-    else setProducts(data || []);
+    try {
+      const response = await fetchAdminApi('/api/admin/products');
+      if (!response.ok) throw new Error('Failed to fetch products');
+      const data = await response.json();
+      setProducts(data || []);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+    }
     setLoading(false);
   }, []);
 
@@ -335,20 +337,28 @@ const MenuPage = () => {
     setSavingImportedItems(true);
     setImportError(null);
 
-    const { error } = await supabase.from("products").insert(
-      itemsToSave.map((item) => ({
-        name: item.name.trim(),
-        description: item.description || null,
-        price_s: item.price_s,
-        price_m: item.price_m,
-        category: item.category,
-        sub_category: item.sub_category || null,
-        image_url: null,
-        is_best_seller: item.is_best_seller,
-      })),
-    );
-
-    if (error) {
+    try {
+      await Promise.all(itemsToSave.map(async (item) => {
+        const res = await fetchAdminApi('/api/admin/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: item.name.trim(),
+            description: item.description || null,
+            price_s: item.price_s,
+            price_m: item.price_m,
+            category: item.category,
+            sub_category: item.sub_category || null,
+            image_url: null,
+            is_best_seller: item.is_best_seller,
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to save product');
+        }
+      }));
+    } catch (error: any) {
       setImportError(`Không thể lưu menu: ${error.message}`);
       setSavingImportedItems(false);
       return;
@@ -378,15 +388,24 @@ const MenuPage = () => {
       price_m: formData.price_m ? parseFloat(formData.price_m) : null,
     };
 
-    if (editingProduct) {
-      const { error } = await supabase
-        .from("products")
-        .update(payload)
-        .eq("id", editingProduct.id);
-      if (error) console.error("Error updating:", error);
-    } else {
-      const { error } = await supabase.from("products").insert([payload]);
-      if (error) console.error("Error inserting:", error);
+    try {
+      if (editingProduct) {
+        const res = await fetchAdminApi(`/api/admin/products/${editingProduct.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Update failed');
+      } else {
+        const res = await fetchAdminApi('/api/admin/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Insert failed');
+      }
+    } catch (error) {
+      console.error("Error saving product:", error);
     }
 
     await fetchProducts();
@@ -395,9 +414,13 @@ const MenuPage = () => {
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Bạn có chắc chắn muốn xóa món này?")) {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) console.error("Error deleting:", error);
-      else fetchProducts();
+      try {
+        const res = await fetchAdminApi(`/api/admin/products/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        fetchProducts();
+      } catch (error) {
+        console.error("Error deleting:", error);
+      }
     }
   };
 

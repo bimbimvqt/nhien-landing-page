@@ -56,9 +56,17 @@ type StoreSettings struct {
 	FacebookURL   *string         `json:"facebook_url"`
 	InstagramURL  *string         `json:"instagram_url"`
 	MapEmbedURL   *string         `json:"map_embed_url"`
-	HeroImageURL  *string         `json:"hero_image_url"`
-	OpeningHours  json.RawMessage `json:"opening_hours"`
-	UpdatedAt     time.Time       `json:"updated_at"`
+	HeroImageURL       *string         `json:"hero_image_url"`
+	OpeningHours       json.RawMessage `json:"opening_hours"`
+	AboutImageURL      *string         `json:"about_image_url"`
+	AboutTitle         *string         `json:"about_title"`
+	AboutDescription1  *string         `json:"about_description_1"`
+	AboutDescription2  *string         `json:"about_description_2"`
+	AboutStats         json.RawMessage `json:"about_stats"`
+	Gallery            json.RawMessage `json:"gallery"`
+	RewardTasks        json.RawMessage `json:"reward_tasks"`
+	RequiredTasksToClaim int          `json:"required_tasks_to_claim"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
 func NewServer(db *pgxpool.Pool, cfg config.Config, logger *slog.Logger) *Server {
@@ -78,6 +86,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/promotions/{id}", s.deletePromotion)
 	mux.HandleFunc("GET /api/store-settings", s.getStoreSettings)
 	mux.HandleFunc("PUT /api/store-settings", s.updateStoreSettings)
+	mux.HandleFunc("POST /api/admin/upload", s.uploadFile)
 
 	mux.HandleFunc("GET /api/internal/users/{user_id}/engagement", s.getUserEngagement)
 	mux.HandleFunc("POST /api/internal/users/{user_id}/profile", s.updateProfile)
@@ -85,6 +94,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/internal/users/{user_id}/favorites/{product_id}", s.removeFavorite)
 	mux.HandleFunc("POST /api/internal/users/{user_id}/claims", s.claimPromotion)
 	mux.HandleFunc("POST /api/internal/users/{user_id}/tasks", s.completeTask)
+	mux.HandleFunc("POST /api/internal/claims/{claim_id}/redeem", s.redeemClaim)
+	mux.HandleFunc("GET /api/internal/claims/search", s.searchClaimsByCode)
+	mux.HandleFunc("GET /api/internal/users/{user_id}/summary", s.getUserSummary)
+	mux.HandleFunc("POST /api/internal/users/{user_id}/loyalty", s.updateLoyalty)
 
 	return s.withCORS(s.withLogging(mux))
 }

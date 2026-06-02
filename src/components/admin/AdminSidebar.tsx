@@ -14,21 +14,30 @@ import {
   Moon,
   Sun,
   Stamp,
-  TicketCheck
+  TicketCheck,
+  BookOpen,
+  Image as LucideImage,
+  ScanLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 
+// Import i18n
+import { useAdminLanguage } from "@/lib/adminLanguage";
+ 
 const sidebarItems = [
-  { name: "Bảng điều khiển", href: "/admin/dashboard", icon: LayoutDashboard, category: "Tổng quan" },
-  { name: "Thực đơn", href: "/admin/menu", icon: Coffee, category: "Quản lý" },
-  { name: "Ảnh Hero", href: "/admin/hero", icon: PanelsTopLeft, category: "Quản lý" },
-  { name: "Khuyến mãi", href: "/admin/promotions", icon: Tag, category: "Quản lý" },
-  { name: "Áp dụng mã", href: "/admin/redeem", icon: TicketCheck, category: "Quản lý" },
-  { name: "Thành viên", href: "/admin/loyalty", icon: Stamp, category: "Quản lý" },
-  { name: "Cài đặt cửa hàng", href: "/admin/hours", icon: Settings, category: "Hệ thống" },
+  { name: "nav.dashboard", href: "/admin/dashboard", icon: LayoutDashboard, category: "nav.overview" },
+  { name: "nav.pos", href: "/admin/pos", icon: ScanLine, category: "nav.pos_category" },
+  { name: "nav.menu", href: "/admin/menu", icon: Coffee, category: "nav.management" },
+  { name: "nav.hero", href: "/admin/hero", icon: PanelsTopLeft, category: "nav.management" },
+  { name: "nav.about", href: "/admin/about", icon: BookOpen, category: "nav.management" },
+  { name: "nav.gallery", href: "/admin/gallery", icon: LucideImage, category: "nav.management" },
+  { name: "nav.promotions", href: "/admin/promotions", icon: Tag, category: "nav.management" },
+  { name: "nav.redeem", href: "/admin/redeem", icon: TicketCheck, category: "nav.management" },
+  { name: "nav.loyalty", href: "/admin/loyalty", icon: Stamp, category: "nav.management" },
+  { name: "nav.hours", href: "/admin/hours", icon: Settings, category: "nav.system" },
 ];
 
 const subscribeToMounted = () => () => {};
@@ -52,6 +61,9 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
     getServerMountedSnapshot
   );
   const isDarkTheme = isMounted && theme === 'dark';
+
+  // Consume i18n
+  const { t } = useAdminLanguage();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -89,7 +101,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
             </div>
             {!isCollapsed && (
               <span className="text-sidebar-foreground font-bold tracking-tight whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-300">
-                Nhien Dashboard
+                {t('nav.brandName')} Dashboard
               </span>
             )}
           </Link>
@@ -112,7 +124,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
             <div key={category} className="space-y-1">
               {!isCollapsed && (
                 <h2 className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/40 px-3 mb-2">
-                  {category}
+                  {t(category as any)}
                 </h2>
               )}
               <div className="space-y-1">
@@ -130,7 +142,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
                             : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                           isCollapsed && "justify-center px-0 h-10"
                         )}
-                        title={isCollapsed ? item.name : ""}
+                        title={isCollapsed ? t(item.name as any) : ""}
                       >
                         <item.icon className={cn(
                           "h-[18px] w-[18px] shrink-0 transition-colors",
@@ -138,7 +150,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
                         )} />
                         {!isCollapsed && (
                           <span className="flex-1 whitespace-nowrap">
-                            {item.name}
+                            {t(item.name as any)}
                           </span>
                         )}
                         {isActive && !isCollapsed && (
@@ -162,7 +174,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
             onClick={() => setTheme(isDarkTheme ? 'light' : 'dark')}
           >
             {isDarkTheme ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
-            {!isCollapsed && <span className="text-xs font-bold uppercase tracking-wider">{isDarkTheme ? 'Giao diện Sáng' : 'Giao diện Tối'}</span>}
+            {!isCollapsed && <span className="text-xs font-bold uppercase tracking-wider">{isDarkTheme ? t('hours.refresh').replace('Làm mới', 'Light Mode') : t('hours.refresh').replace('Làm mới', 'Dark Mode')}</span>}
           </Button>
 
           <div className={cn("flex items-center gap-3 rounded-xl border border-sidebar-border shadow-sm transition-all overflow-hidden", isCollapsed ? "p-1.5 justify-center" : "px-3 py-2 bg-sidebar-background")}>
@@ -176,7 +188,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
                   onClick={handleLogout}
                   className="text-[9px] text-rose-500 font-bold uppercase tracking-wider hover:text-rose-600 transition-colors mt-1"
                 >
-                  Đăng xuất
+                  {t('header.logout')}
                 </button>
               </div>
             )}
@@ -184,7 +196,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
               <button 
                 onClick={handleLogout}
                 className="absolute inset-0 z-10 opacity-0 cursor-pointer"
-                title="Đăng xuất"
+                title={t('header.logout')}
               />
             )}
           </div>

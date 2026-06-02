@@ -56,7 +56,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
 
   } catch (error: any) {
-    console.error('Image proxy error:', error);
+    console.warn('S3 direct fetch failed, trying public CDN fallback:', error);
+    try {
+      const bucketName = process.env.CDN_S3_BUCKET || 'nhien-coffee';
+      let key = pathParts.join('/');
+      if (key.startsWith(`${bucketName}/`)) {
+        key = key.substring(bucketName.length + 1);
+      }
+      
+      const fallbackUrl = `https://cdn.skytruong.com/${bucketName}/${key}`;
+      const res = await fetch(fallbackUrl);
+      if (res.ok && res.body) {
+        return new NextResponse(res.body, {
+          headers: {
+            'Content-Type': res.headers.get('Content-Type') || 'image/jpeg',
+            'Cache-Control': 'public, max-age=86400, stale-while-revalidate=43200',
+          },
+        });
+      }
+    } catch (fallbackError) {
+      console.error('Fallback fetch also failed:', fallbackError);
+    }
     return new NextResponse('Error fetching image', { status: 500 });
   }
 }

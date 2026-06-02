@@ -89,6 +89,28 @@ export interface OpeningHour {
   closed: boolean;
 }
 
+export interface AboutStat {
+  value: string;
+  label: string;
+}
+
+export interface GalleryItem {
+  id: string;
+  imageUrl: string;
+  title: string;
+  description?: string;
+}
+
+export interface RewardTask {
+  key: string;
+  title: string;
+  description: string;
+  reward: string;
+  actionLabel: string;
+  kind: 'auto' | 'confirm' | 'share' | 'profile' | 'counter';
+  active?: boolean;
+}
+
 export interface StoreSettings {
   id: number;
   brand_name: string;
@@ -99,5 +121,13 @@ export interface StoreSettings {
   map_embed_url: string | null;
   hero_image_url: string | null;
   opening_hours: OpeningHour[];
+  about_image_url: string | null;
+  about_title: string | null;
+  about_description_1: string | null;
+  about_description_2: string | null;
+  about_stats: AboutStat[] | null;
+  gallery: GalleryItem[] | null;
+  required_tasks_to_claim?: number;
+  reward_tasks?: RewardTask[] | null;
   updated_at: string;
 }

@@ -30,11 +30,11 @@ export default async function LandingPage() {
     <main className="landing-theme min-h-screen">
       <Navbar />
       <Hero backgroundImageUrl={storeSettings.hero_image_url || ''} />
-      <About />
+      <About settings={storeSettings} />
       <BestSeller />
       <Menu />
       <Promotions settings={storeSettings} />
-      <Gallery />
+      <Gallery settings={storeSettings} />
       <Footer settings={storeSettings} />
       <FloatingActions settings={storeSettings} />
     </main>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
   Gift,
@@ -50,6 +51,9 @@ function getTier(points: number, stamps: number) {
 }
 
 export default function LoyaltyPage() {
+  const searchParams = useSearchParams();
+  const urlUserId = searchParams ? searchParams.get('user_id') : null;
+
   const [profiles, setProfiles] = useState<ProfileWithLoyalty[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
@@ -94,9 +98,9 @@ export default function LoyaltyPage() {
     }));
 
     setProfiles(nextProfiles);
-    setSelectedUserId((current) => current || nextProfiles[0]?.user_id || null);
+    setSelectedUserId((current) => urlUserId || current || nextProfiles[0]?.user_id || null);
     setLoading(false);
-  }, []);
+  }, [urlUserId]);
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -105,6 +109,12 @@ export default function LoyaltyPage() {
 
     return () => window.clearTimeout(timer);
   }, [fetchMembers]);
+
+  React.useEffect(() => {
+    if (urlUserId) {
+      setSelectedUserId(urlUserId);
+    }
+  }, [urlUserId]);
 
   const fetchTransactions = React.useCallback(async (userId: string | null) => {
     if (!userId) {

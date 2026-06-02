@@ -27,11 +27,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
-import type { Profile, Promotion, PromotionClaim } from '@/types';
+import type { Promotion, PromotionClaim } from '@/types';
 
 type ClaimWithDetails = PromotionClaim & {
   promotion: Promotion | null;
-  profile?: Profile | null;
+  display_name?: string | null;
+  email?: string | null;
 };
 
 export default function RedeemPage() {
@@ -60,37 +61,31 @@ export default function RedeemPage() {
     setError(null);
     setMessage(null);
 
-    const { data, error } = await supabase
-      .from('promotion_claims')
-      .select(
-        'id, user_id, promotion_id, code_snapshot, claimed_at, redeemed_count, remaining_uses, redeemed_at, redeemed_by, redeem_note, promotion:promotions(*)',
-      )
-      .eq('code_snapshot', normalizedCode)
-      .order('claimed_at', { ascending: false })
-      .limit(30);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/admin/claims/search?code=${encodeURIComponent(normalizedCode)}`, {
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+        cache: 'no-store',
+      });
 
-    if (error) {
-      setError(error.message);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Lỗi tìm kiếm' }));
+        setError(errData.error || 'Không thể tìm kiếm mã.');
+        setClaims([]);
+        setLoading(false);
+        return;
+      }
+
+      const rows = (await res.json()) as ClaimWithDetails[];
+      setClaims(rows);
+      setMessage(rows.length === 0 ? 'Không tìm thấy claim nào cho mã này.' : `Tìm thấy ${rows.length} lượt nhận mã.`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Lỗi không xác định');
       setClaims([]);
-      setLoading(false);
-      return;
     }
 
-    const rows = (data || []) as unknown as ClaimWithDetails[];
-    const userIds = rows.map((row) => row.user_id);
-    let profileMap = new Map<string, Profile>();
-
-    if (userIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, email, phone, created_at, updated_at')
-        .in('user_id', userIds);
-
-      profileMap = new Map((profiles || []).map((profile) => [profile.user_id, profile as Profile]));
-    }
-
-    setClaims(rows.map((row) => ({ ...row, profile: profileMap.get(row.user_id) || null })));
-    setMessage(rows.length === 0 ? 'Không tìm thấy claim nào cho mã này.' : `Tìm thấy ${rows.length} lượt nhận mã.`);
     setLoading(false);
   };
 
@@ -112,48 +107,36 @@ export default function RedeemPage() {
     setError(null);
     setMessage(null);
 
-    const { data: authData } = await supabase.auth.getUser();
-    const redeemedAt = new Date().toISOString();
-    const [claimResult, promoResult] = await Promise.all([
-      supabase
-        .from('promotion_claims')
-        .update({
-          redeemed_at: redeemedAt,
-          redeemed_by: authData.user?.id || null,
-          redeem_note: note.trim() || null,
-          redeemed_count: (claim.redeemed_count || 0) + 1,
-          remaining_uses: Math.max(0, (claim.remaining_uses ?? 1) - 1),
-        })
-        .eq('id', claim.id)
-        .gt('remaining_uses', 0)
-        .select(
-          'id, user_id, promotion_id, code_snapshot, claimed_at, redeemed_count, remaining_uses, redeemed_at, redeemed_by, redeem_note, promotion:promotions(*)',
-        )
-        .single(),
-      supabase.rpc('increment_promotion_usage', { promotion_id_input: claim.promotion_id }),
-    ]);
+    const { data: { session } } = await supabase.auth.getSession();
 
-    if (claimResult.error) {
-      setError(claimResult.error.message);
+    const res = await fetch(`/api/admin/claims/${claim.id}/redeem`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`,
+      },
+      body: JSON.stringify({ redeem_note: note.trim() || 'Áp dụng tại quầy' }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: 'Lỗi không xác định' }));
+      setError(errData.error || 'Không thể áp dụng mã.');
       setRedeemingId(null);
       return;
     }
 
-    if (promoResult.error) {
-      const nextUsage = (claim.promotion?.usage_count || 0) + 1;
-      await supabase
-        .from('promotions')
-        .update({ usage_count: nextUsage })
-        .eq('id', claim.promotion_id);
-    }
+    const updatedClaim = await res.json();
 
     setClaims((current) =>
       current.map((item) =>
         item.id === claim.id
           ? {
               ...item,
-              ...(claimResult.data as unknown as ClaimWithDetails),
-              profile: item.profile,
+              redeemed_count: updatedClaim.redeemed_count,
+              remaining_uses: updatedClaim.remaining_uses,
+              redeemed_at: updatedClaim.redeemed_at,
+              redeemed_by: updatedClaim.redeemed_by,
+              redeem_note: updatedClaim.redeem_note,
               promotion: item.promotion
                 ? {
                     ...item.promotion,
@@ -271,7 +254,7 @@ export default function RedeemPage() {
             claim.promotion?.max_total_redemptions &&
               (claim.promotion.usage_count || 0) >= claim.promotion.max_total_redemptions,
           );
-          const profileName = claim.profile?.display_name || claim.profile?.email || 'Khách hàng';
+          const profileName = claim.display_name || claim.email || 'Khách hàng';
 
           return (
             <Card key={claim.id} className="overflow-hidden rounded-[24px] border-border/50 bg-card shadow-sm">

@@ -40,7 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { supabase } from "@/lib/supabaseClient";
+
 import { cn } from "@/lib/utils";
 import { Promotion } from "@/types";
 import {
@@ -60,6 +60,7 @@ import {
   Zap,
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
+import { fetchAdminApi } from '@/lib/adminApi';
 
 type PromoAnalytics = {
   claimed: number;
@@ -68,9 +69,6 @@ type PromoAnalytics = {
 
 const PromotionsPage = () => {
   const [promos, setPromos] = useState<Promotion[]>([]);
-  const [analytics, setAnalytics] = useState<Record<string, PromoAnalytics>>(
-    {},
-  );
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Promotion | null>(null);
@@ -84,29 +82,18 @@ const PromotionsPage = () => {
     active: true,
   });
 
+  const [discountType, setDiscountType] = useState<"percent" | "amount" | "custom">("percent");
+  const [discountValue, setDiscountValue] = useState("");
+
   const fetchPromos = useCallback(async () => {
     setLoading(true);
-    const [{ data, error }, claimsResult] = await Promise.all([
-      supabase
-        .from("promotions")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase.from("promotion_claims").select("promotion_id, redeemed_count"),
-    ]);
-
-    if (error) console.error("Error fetching promos:", error);
-    else setPromos(data || []);
-    if (!claimsResult.error) {
-      const nextAnalytics: Record<string, PromoAnalytics> = {};
-      (claimsResult.data || []).forEach((claim) => {
-        if (!nextAnalytics[claim.promotion_id]) {
-          nextAnalytics[claim.promotion_id] = { claimed: 0, redeemed: 0 };
-        }
-        nextAnalytics[claim.promotion_id].claimed += 1;
-        nextAnalytics[claim.promotion_id].redeemed +=
-          Number(claim.redeemed_count) || 0;
-      });
-      setAnalytics(nextAnalytics);
+    try {
+      const response = await fetchAdminApi('/api/admin/promotions');
+      if (!response.ok) throw new Error('Failed to fetch promotions');
+      const data = await response.json();
+      setPromos(data || []);
+    } catch (error) {
+      console.error("Error fetching promos:", error);
     }
     setLoading(false);
   }, []);
@@ -130,6 +117,21 @@ const PromotionsPage = () => {
         end_date: promo.end_date || "",
         active: promo.active,
       });
+      // Parse discount
+      let type: "percent" | "amount" | "custom" = "custom";
+      let val = promo.discount;
+      if (promo.discount.endsWith("%")) {
+        type = "percent";
+        val = promo.discount.slice(0, -1);
+      } else if (promo.discount.toLowerCase().endsWith("k")) {
+        type = "amount";
+        val = promo.discount.toLowerCase().slice(0, -1);
+      } else if (promo.discount.toLowerCase().endsWith("đ")) {
+        type = "amount";
+        val = promo.discount.toLowerCase().slice(0, -1);
+      }
+      setDiscountType(type);
+      setDiscountValue(val);
     } else {
       setEditingPromo(null);
       setFormData({
@@ -141,6 +143,8 @@ const PromotionsPage = () => {
         end_date: "",
         active: true,
       });
+      setDiscountType("percent");
+      setDiscountValue("");
     }
     setIsModalOpen(true);
   };
@@ -148,10 +152,17 @@ const PromotionsPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const finalDiscount =
+      discountType === "percent"
+        ? `${discountValue}%`
+        : discountType === "amount"
+        ? `${discountValue}k`
+        : discountValue;
+
     const payload = {
       name: formData.name,
       code: formData.code,
-      discount: formData.discount,
+      discount: finalDiscount,
       max_redemptions_per_user: Math.max(
         1,
         Number(formData.max_redemptions_per_user) || 1,
@@ -163,15 +174,24 @@ const PromotionsPage = () => {
       active: formData.active,
     };
 
-    if (editingPromo) {
-      const { error } = await supabase
-        .from("promotions")
-        .update(payload)
-        .eq("id", editingPromo.id);
-      if (error) console.error("Error updating:", error);
-    } else {
-      const { error } = await supabase.from("promotions").insert([payload]);
-      if (error) console.error("Error inserting:", error);
+    try {
+      if (editingPromo) {
+        const res = await fetchAdminApi(`/api/admin/promotions/${editingPromo.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Update failed');
+      } else {
+        const res = await fetchAdminApi('/api/admin/promotions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Insert failed');
+      }
+    } catch (error) {
+      console.error("Error saving promotion:", error);
     }
 
     await fetchPromos();
@@ -180,31 +200,32 @@ const PromotionsPage = () => {
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Bạn có chắc chắn muốn xóa khuyến mãi này?")) {
-      const { error } = await supabase.from("promotions").delete().eq("id", id);
-      if (error) console.error("Error deleting:", error);
-      else fetchPromos();
+      try {
+        const res = await fetchAdminApi(`/api/admin/promotions/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        fetchPromos();
+      } catch (error) {
+        console.error("Error deleting:", error);
+      }
     }
   };
 
   const handleToggleActive = async (promo: Promotion) => {
-    const { error } = await supabase
-      .from("promotions")
-      .update({ active: !promo.active })
-      .eq("id", promo.id);
-    if (error) console.error("Error toggling active:", error);
-    else fetchPromos();
+    try {
+      const res = await fetchAdminApi(`/api/admin/promotions/${promo.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...promo, active: !promo.active })
+      });
+      if (!res.ok) throw new Error('Toggle failed');
+      fetchPromos();
+    } catch (error) {
+      console.error("Error toggling active:", error);
+    }
   };
 
   const activePromosCount = promos.filter((p) => p.active).length;
   const totalUsage = promos.reduce((sum, p) => sum + (p.usage_count || 0), 0);
-  const totalClaims = Object.values(analytics).reduce(
-    (sum, item) => sum + item.claimed,
-    0,
-  );
-  const totalRedeemed = Object.values(analytics).reduce(
-    (sum, item) => sum + item.redeemed,
-    0,
-  );
 
   return (
     <div className="space-y-8 pb-10">
@@ -248,15 +269,8 @@ const PromotionsPage = () => {
             bg: "bg-emerald-50 dark:bg-emerald-500/10",
           },
           {
-            title: "Mã đã nhận",
-            value: totalClaims.toString(),
-            icon: Zap,
-            color: "text-blue-600 dark:text-blue-400",
-            bg: "bg-blue-50 dark:bg-blue-500/10",
-          },
-          {
-            title: "Đã áp dụng",
-            value: `${totalRedeemed}/${totalUsage}`,
+            title: "Tổng lượt sử dụng",
+            value: totalUsage.toString(),
             icon: Sparkles,
             color: "text-amber-600 dark:text-amber-400",
             bg: "bg-amber-50 dark:bg-amber-500/10",
@@ -359,8 +373,7 @@ const PromotionsPage = () => {
                         </p>
                         <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1 mt-0.5 uppercase tracking-wider">
                           <BarChart3 className="h-3 w-3" />
-                          {analytics[promo.id]?.claimed || 0} nhận ·{" "}
-                          {analytics[promo.id]?.redeemed || 0} dùng ·{" "}
+                          {promo.usage_count || 0} lần sử dụng ·{" "}
                           {promo.max_redemptions_per_user || 1} lượt/user
                         </p>
                       </TableCell>
@@ -481,37 +494,96 @@ const PromotionsPage = () => {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                  Mã giảm giá (Code)
+                </Label>
+                <Input
+                  required
+                  value={formData.code}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      code: e.target.value.toUpperCase(),
+                    })
+                  }
+                  className="rounded-2xl border-border bg-muted/20 h-12 px-4 focus-visible:ring-primary/10 transition-all font-mono font-bold text-foreground"
+                  placeholder="VD: HELLO2026"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
-                    Mã giảm giá (Code)
+                    Kiểu giảm giá
                   </Label>
-                  <Input
-                    required
-                    value={formData.code}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        code: e.target.value.toUpperCase(),
-                      })
-                    }
-                    className="rounded-2xl border-border bg-muted/20 h-12 px-4 focus-visible:ring-primary/10 transition-all font-mono font-bold text-foreground"
-                    placeholder="VD: HELLO2026"
-                  />
+                  <div className="flex gap-2 p-1 bg-muted/30 rounded-2xl border border-border/50 h-12 items-center">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType("percent")}
+                      className={cn(
+                        "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
+                        discountType === "percent"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Giảm %
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType("amount")}
+                      className={cn(
+                        "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
+                        discountType === "amount"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Giảm Tiền
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType("custom")}
+                      className={cn(
+                        "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
+                        discountType === "custom"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Khác
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
                     Mức giảm (Discount)
                   </Label>
-                  <Input
-                    required
-                    value={formData.discount}
-                    onChange={(e) =>
-                      setFormData({ ...formData, discount: e.target.value })
-                    }
-                    className="rounded-2xl border-border bg-muted/20 h-12 px-4 focus-visible:ring-primary/10 transition-all text-foreground"
-                    placeholder="VD: 20% hoặc BOGO"
-                  />
+                  <div className="relative">
+                    <Input
+                      required
+                      type={discountType === "custom" ? "text" : "number"}
+                      min={1}
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      className="rounded-2xl border-border bg-muted/20 h-12 pl-4 pr-10 focus-visible:ring-primary/10 transition-all text-foreground font-bold"
+                      placeholder={
+                        discountType === "percent"
+                          ? "VD: 15"
+                          : discountType === "amount"
+                          ? "VD: 20"
+                          : "VD: Mua 1 Tặng 1"
+                      }
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-muted-foreground uppercase tracking-widest pointer-events-none">
+                      {discountType === "percent"
+                        ? "%"
+                        : discountType === "amount"
+                        ? "k"
+                        : ""}
+                    </span>
+                  </div>
                 </div>
               </div>
 

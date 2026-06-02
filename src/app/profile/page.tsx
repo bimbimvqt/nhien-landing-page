@@ -25,6 +25,7 @@ import React, { useEffect, useState } from "react";
 import { SeraGoogleLoginForm } from "@/components/auth/SeraGoogleLoginForm";
 import Navbar from "@/components/landing/Navbar";
 import { SeraButton, SeraLinkButton } from "@/components/sera/button";
+import { VerifyBadge, VerifyIcon, FloatingVerifyBadge } from "@/components/sera/verify-badge";
 import { getAuthRedirectUrl, getUserAvatarUrl, getUserDisplayName, isAdminUser } from "@/lib/auth";
 import { REWARD_TASKS, type RewardTaskKey } from "@/lib/customerEngagement";
 import { getProxiedImageUrl } from "@/lib/image-proxy";
@@ -66,6 +67,7 @@ export default function ProfilePage() {
   const [favorites, setFavorites] = useState<FavoriteWithProduct[]>([]);
   const [claims, setClaims] = useState<ClaimWithPromotion[]>([]);
   const [completedTaskKeys, setCompletedTaskKeys] = useState<RewardTaskKey[]>([]);
+  const [rewardTasks, setRewardTasks] = useState(REWARD_TASKS);
   const [loyaltyAccount, setLoyaltyAccount] = useState<LoyaltyAccount | null>(null);
   const [loyaltyTransactions, setLoyaltyTransactions] = useState<LoyaltyTransaction[]>([]);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -78,6 +80,12 @@ export default function ProfilePage() {
   const memberQrUrl = user
     ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`nhien-member:${user.id}`)}`
     : '';
+
+  const getBadgeType = (tier: string): "basic" | "gold" | "premium" => {
+    if (tier === "Gold") return "premium";
+    if (tier === "Silver") return "gold";
+    return "basic";
+  };
 
   const loadCustomerData = React.useCallback(async (currentUser: User | null) => {
     if (!currentUser) {
@@ -113,6 +121,21 @@ export default function ProfilePage() {
         console.error('Failed to update profile');
       }
 
+      // Fetch store settings for tasks list
+      let tasksList = REWARD_TASKS;
+      try {
+        const settingsRes = await fetch('/api/admin/store-settings');
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          if (settingsData && settingsData.reward_tasks) {
+            tasksList = settingsData.reward_tasks;
+            setRewardTasks(tasksList);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch custom tasks:', e);
+      }
+
       // Fetch engagement
       const res = await fetch('/api/me/engagement', {
         headers: { 'Authorization': `Bearer ${session.access_token}` }
@@ -124,7 +147,7 @@ export default function ProfilePage() {
       setFavorites(data.favorites || []);
       setClaims(data.claims || []);
       setCompletedTaskKeys((data.completed_tasks || []).filter((key: any): key is RewardTaskKey =>
-        REWARD_TASKS.some((task) => task.key === key)
+        tasksList.some((task) => task.key === key)
       ));
       setLoyaltyAccount(data.loyalty_account || null);
       setLoyaltyTransactions(data.loyalty_transactions || []);
@@ -137,22 +160,71 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    let activeUserId: string | null = null;
+    let claimsSubscription: ReturnType<typeof supabase.channel> | null = null;
+
+    const setupRealtimeListener = (userId: string | undefined) => {
+      if (claimsSubscription) {
+        void supabase.removeChannel(claimsSubscription);
+        claimsSubscription = null;
+      }
+      if (!userId) return;
+
+      const channel = supabase
+        .channel(`realtime:profile_claims_${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'promotion_claims',
+            filter: `user_id=eq.${userId}`,
+          },
+          () => {
+            // Re-fetch with full user data
+            supabase.auth.getUser().then(({ data }) => {
+              if (data.user?.id === userId) {
+                void loadCustomerData(data.user);
+              }
+            });
+          }
+        );
+      channel.subscribe();
+      claimsSubscription = channel;
+    };
+
+    // Initial load
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setCheckingSession(false);
+      activeUserId = data.user?.id ?? null;
       void loadCustomerData(data.user);
+      setupRealtimeListener(data.user?.id);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
+      const newUserId = currentUser?.id ?? null;
+
       setUser(currentUser);
       setAuthLoading(false);
-      void loadCustomerData(currentUser);
+
+      // Only refetch if user actually changed (not just a token refresh)
+      if (newUserId !== activeUserId) {
+        activeUserId = newUserId;
+        void loadCustomerData(currentUser);
+        setupRealtimeListener(currentUser?.id);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (claimsSubscription) {
+        void supabase.removeChannel(claimsSubscription);
+      }
+    };
   }, [loadCustomerData]);
 
   const handleGoogleLogin = async () => {
@@ -257,17 +329,25 @@ export default function ProfilePage() {
                     </SeraButton>
                   </div>
 
-                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[2rem] bg-sera-ember text-4xl font-black text-white ring-4 ring-white/10">
-                    {avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={avatarUrl}
-                        alt={userName}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      userName.charAt(0).toUpperCase()
-                    )}
+                  <div className="relative inline-block">
+                    <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[2rem] bg-sera-ember text-4xl font-black text-white ring-4 ring-white/10">
+                      {avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={avatarUrl}
+                          alt={userName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        userName.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <FloatingVerifyBadge
+                      type={getBadgeType(loyaltyAccount?.tier || "Member")}
+                      size="sm"
+                      position="bottom-right"
+                      animate
+                    />
                   </div>
 
                   <h1 className="mt-6 text-3xl font-black leading-tight">
@@ -380,7 +460,16 @@ export default function ProfilePage() {
                 <MemberStat
                   icon={<Trophy className="h-5 w-5" />}
                   label="Hạng thành viên"
-                  value={loyaltyAccount?.tier || "Member"}
+                  value={
+                    <div className="flex items-center gap-2">
+                      <span>{loyaltyAccount?.tier || "Member"}</span>
+                      <VerifyIcon
+                        type={getBadgeType(loyaltyAccount?.tier || "Member")}
+                        size="xs"
+                        animate
+                      />
+                    </div>
+                  }
                 />
                 <MemberStat
                   icon={<Star className="h-5 w-5" />}
@@ -403,41 +492,43 @@ export default function ProfilePage() {
                   empty={favorites.length === 0}
                   emptyText="Chưa lưu món nào"
                 >
-                  <div className="space-y-3">
-                    {favorites.slice(0, 5).map((favorite) => (
-                      <div
-                        key={favorite.id}
-                        className="group flex items-center gap-4 rounded-3xl bg-sera-cream p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm"
-                      >
-                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-sera-surface">
-                          <Image
-                            src={getProxiedImageUrl(favorite.product?.image_url || DEFAULT_PRODUCT_IMAGE)}
-                            alt={favorite.product?.name || "Món yêu thích"}
-                            fill
-                            sizes="64px"
-                            className="object-cover transition-transform duration-500 group-hover:scale-110"
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="truncate font-black text-sera-ink transition-colors">
-                            {favorite.product?.name || "Món đã lưu"}
-                          </h4>
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="truncate text-xs font-bold uppercase tracking-wider text-sera-muted">
+                  <div className="max-h-[350px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-sera-muted/25 scrollbar-track-transparent">
+                    <div className="grid grid-cols-2 gap-3.5">
+                      {favorites.map((favorite) => (
+                        <div
+                          key={favorite.id}
+                          className="group relative flex flex-col items-center text-center p-3.5 bg-sera-cream rounded-[2rem] border border-transparent hover:border-sera-ember/15 transition-all duration-300 hover:-translate-y-1 hover:shadow-sm"
+                        >
+                          <div className="relative w-18 h-18 md:w-20 md:h-20 mb-2.5 shrink-0">
+                            {/* Outer gradient glow on hover */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-sera-ember to-amber-500 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-300" />
+                            <div className="relative w-full h-full rounded-full overflow-hidden border-4 border-sera-surface group-hover:border-sera-ember/10 transition-all duration-300 shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)] bg-sera-surface">
+                              <Image
+                                src={getProxiedImageUrl(favorite.product?.image_url || DEFAULT_PRODUCT_IMAGE)}
+                                alt={favorite.product?.name || "Món yêu thích"}
+                                fill
+                                sizes="80px"
+                                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="w-full min-w-0">
+                            <h4 className="truncate font-black text-xs md:text-sm text-sera-ink group-hover:text-sera-ember transition-colors duration-300">
+                              {favorite.product?.name || "Món đã lưu"}
+                            </h4>
+                            <span className="mt-1.5 inline-block text-[9px] font-bold uppercase tracking-wider text-sera-muted px-2 py-0.5 bg-sera-surface rounded-full">
                               {favorite.product?.category || "Thực đơn"}
                             </span>
                             {favorite.product?.price_s ? (
-                              <>
-                                <span className="text-sera-muted/50">·</span>
-                                <span className="text-sm font-bold text-sera-ember">
-                                  {new Intl.NumberFormat('vi-VN').format(favorite.product.price_s)}đ
-                                </span>
-                              </>
+                              <span className="block mt-1.5 text-xs font-black text-sera-ember">
+                                {new Intl.NumberFormat('vi-VN').format(favorite.product.price_s)}đ
+                              </span>
                             ) : null}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </ProfilePanel>
 
@@ -449,7 +540,7 @@ export default function ProfilePage() {
                   empty={claims.length === 0}
                   emptyText="Chưa nhận mã nào"
                 >
-                  <div className="space-y-3">
+                  <div className="max-h-[350px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-sera-muted/25 scrollbar-track-transparent space-y-3">
                     {claims.map((claim) => (
                       <div key={claim.id} className="rounded-3xl bg-sera-cream p-4 text-sm">
                         <span className="block font-black text-sera-ink">
@@ -484,8 +575,8 @@ export default function ProfilePage() {
                   empty={completedTaskKeys.length === 0}
                   emptyText="Chưa hoàn thành nhiệm vụ nào"
                 >
-                  <div className="space-y-3">
-                    {REWARD_TASKS.filter((task) => completedTaskKeys.includes(task.key)).map((task) => (
+                  <div className="max-h-[350px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-sera-muted/25 scrollbar-track-transparent space-y-3">
+                    {rewardTasks.filter((task) => completedTaskKeys.includes(task.key as RewardTaskKey)).map((task) => (
                       <div key={task.key} className="rounded-3xl bg-sera-cream p-4 text-sm">
                         <span className="block font-black text-sera-ink">{task.title}</span>
                         <span className="mt-1 block text-sera-muted">{task.reward}</span>
@@ -502,7 +593,7 @@ export default function ProfilePage() {
                   empty={loyaltyTransactions.length === 0}
                   emptyText="Chưa có giao dịch điểm"
                 >
-                  <div className="space-y-3">
+                  <div className="max-h-[350px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-sera-muted/25 scrollbar-track-transparent space-y-3">
                     {loyaltyTransactions.map((transaction) => (
                       <div key={transaction.id} className="rounded-3xl bg-sera-cream p-4 text-sm">
                         <span className="block font-black text-sera-ink">
@@ -550,7 +641,7 @@ function MemberStat({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
 }) {
   return (
     <div className="rounded-[2rem] border border-sera-ink/10 bg-sera-surface p-5">
@@ -560,7 +651,7 @@ function MemberStat({
       <p className="text-xs font-bold uppercase tracking-widest text-sera-muted">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-black text-sera-ink">{value}</p>
+      <div className="mt-2 text-2xl font-black text-sera-ink">{value}</div>
     </div>
   );
 }

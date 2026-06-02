@@ -21,8 +21,8 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/lib/supabaseClient';
 import { getProxiedImageUrl } from '@/lib/image-proxy';
+import { fetchAdminApi } from '@/lib/adminApi';
 
 const DEFAULT_HERO_BACKGROUND =
   'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=2070&auto=format&fit=crop';
@@ -37,6 +37,7 @@ export default function HeroSettingsPage() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentSettings, setCurrentSettings] = useState<any>(null);
 
   const previewUrl = imagePreviewUrl || imageUrl.trim() || DEFAULT_HERO_BACKGROUND;
 
@@ -45,50 +46,46 @@ export default function HeroSettingsPage() {
     setError(null);
     setMessage(null);
 
-    const { data, error } = await supabase
-      .from('store_settings')
-      .select('hero_image_url')
-      .eq('id', 1)
-      .maybeSingle();
-
-    if (error) {
-      setError(error.message);
+    try {
+      const res = await fetchAdminApi('/api/admin/store-settings');
+      if (!res.ok) {
+        throw new Error('Failed to fetch settings');
+      }
+      const data = await res.json();
+      setCurrentSettings(data);
+      const nextImageUrl = data?.hero_image_url || DEFAULT_HERO_BACKGROUND;
+      setImageUrl(nextImageUrl);
+      setSavedImageUrl(nextImageUrl);
+      setSelectedImageFile(null);
+      setImagePreviewUrl('');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const nextImageUrl = data?.hero_image_url || DEFAULT_HERO_BACKGROUND;
-    setImageUrl(nextImageUrl);
-    setSavedImageUrl(nextImageUrl);
-    setSelectedImageFile(null);
-    setImagePreviewUrl('');
-    setLoading(false);
   };
 
   useEffect(() => {
     let isActive = true;
 
-    supabase
-      .from('store_settings')
-      .select('hero_image_url')
-      .eq('id', 1)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!isActive) {
-          return;
-        }
-
-        if (error) {
-          setError(error.message);
-          setLoading(false);
-          return;
-        }
-
+    fetchAdminApi('/api/admin/store-settings')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch settings');
+        return res.json();
+      })
+      .then((data) => {
+        if (!isActive) return;
+        setCurrentSettings(data);
         const nextImageUrl = data?.hero_image_url || DEFAULT_HERO_BACKGROUND;
         setImageUrl(nextImageUrl);
         setSavedImageUrl(nextImageUrl);
         setSelectedImageFile(null);
         setImagePreviewUrl('');
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!isActive) return;
+        setError(err.message);
         setLoading(false);
       });
 
@@ -169,19 +166,22 @@ export default function HeroSettingsPage() {
       return;
     }
 
-    const { error } = await supabase
-      .from('store_settings')
-      .upsert(
-        {
-          id: 1,
+    try {
+      const updateRes = await fetchAdminApi('/api/admin/store-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(currentSettings || {}),
           hero_image_url: nextImageUrl,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' },
-      );
+        }),
+      });
 
-    if (error) {
-      setError(error.message);
+      if (!updateRes.ok) {
+        const errData = await updateRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update settings');
+      }
+    } catch (err: any) {
+      setError(err.message);
       setSaving(false);
       return;
     }
