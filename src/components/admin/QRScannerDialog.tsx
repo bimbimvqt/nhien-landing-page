@@ -19,12 +19,9 @@ export function QRScannerDialog({ isOpen, onClose, onScan }: QRScannerDialogProp
 
   useEffect(() => {
     let isMounted = true;
+    let scanner: Html5Qrcode | null = null;
+
     if (!isOpen) {
-      if (scannerRef.current && scannerRef.current.isScanning) {
-        scannerRef.current.stop().then(() => {
-           scannerRef.current?.clear();
-        }).catch(console.error);
-      }
       return;
     }
 
@@ -33,7 +30,7 @@ export function QRScannerDialog({ isOpen, onClose, onScan }: QRScannerDialogProp
       if (!document.getElementById("qr-reader")) return;
       if (!isMounted) return;
 
-      const scanner = new Html5Qrcode("qr-reader");
+      scanner = new Html5Qrcode("qr-reader");
       scannerRef.current = scanner;
       setIsStarting(true);
       setErrorMsg(null);
@@ -42,11 +39,10 @@ export function QRScannerDialog({ isOpen, onClose, onScan }: QRScannerDialogProp
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-          if (scannerRef.current?.isScanning) {
-            scannerRef.current.stop().then(() => {
-              onScan(decodedText);
-              onClose();
-            }).catch(console.error);
+          if (scanner?.isScanning) {
+            scanner.pause();
+            onScan(decodedText);
+            onClose();
           }
         },
         () => {
@@ -66,12 +62,17 @@ export function QRScannerDialog({ isOpen, onClose, onScan }: QRScannerDialogProp
     return () => {
       isMounted = false;
       clearTimeout(timer);
-      if (scannerRef.current) {
-        if (scannerRef.current.isScanning) {
-          scannerRef.current.stop().catch(console.error);
+      
+      if (scanner) {
+        if (scanner.isScanning) {
+          scanner.stop().then(() => {
+             scanner?.clear();
+          }).catch(console.error);
+        } else {
+          try { scanner.clear(); } catch(e) {}
         }
-        scannerRef.current.clear();
       }
+      scannerRef.current = null;
     };
   }, [isOpen, onScan, onClose]);
 

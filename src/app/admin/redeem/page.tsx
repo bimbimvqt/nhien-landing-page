@@ -149,6 +149,7 @@ export default function RedeemPage() {
     );
     setMessage('Đã áp dụng mã và cập nhật lượt sử dụng.');
     setRedeemingId(null);
+    window.alert('Áp dụng mã thành công!');
   };
 
   const copyUserId = async (userId: string) => {
