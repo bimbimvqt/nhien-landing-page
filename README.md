@@ -20,28 +20,46 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Deploy with Docker Compose
+## Quy Trình Khởi Chạy & Cập Nhật Server (Deployment Rules)
 
-Create a `.env` file from `.env.example` and fill in the real values:
+Mỗi khi bạn có sự thay đổi về **Code** (thêm/sửa/xoá tính năng) hoặc thay đổi **Biến môi trường (`.env`)** trên server, bạn **BẮT BUỘC** phải build lại các container để code mới và cấu hình mới được áp dụng.
 
-```bash
-cp .env.example .env
-```
-
-Build and start the production container:
-
+### 1. Khởi chạy lần đầu hoặc Cập nhật toàn bộ (Cả Web và API)
+Chạy lệnh sau tại thư mục chứa mã nguồn trên server:
 ```bash
 docker compose up -d --build
 ```
+*(Lệnh này sẽ tự động build lại image cho những service có thay đổi và khởi động lại container tương ứng).*
 
-If your Docker installation uses the legacy Compose binary, use `docker-compose up -d --build`.
+### 2. Nếu chỉ muốn cập nhật 1 phần cụ thể (để tiết kiệm thời gian)
+Nếu bạn chỉ thay đổi code ở frontend (Web) hoặc backend (API), bạn có thể chỉ định cụ thể service để build lại:
+- **Chỉ cập nhật Web (Next.js)**: 
+  ```bash
+  docker compose up -d --build web
+  ```
+- **Chỉ cập nhật API (Go)**:
+  ```bash
+  docker compose up -d --build api
+  ```
 
-The app is available at [http://localhost:3000](http://localhost:3000). To use another host port, set `APP_PORT` in `.env`, for example `APP_PORT=8080`.
+### 3. Xử lý lỗi thường gặp
+- **Lỗi thiếu mạng (network nginx-manager_default declared as external, but could not be found)**: 
+  Hãy tạo mạng lưới ảo proxy trước khi chạy docker compose:
+  ```bash
+  docker network create nginx-manager_default
+  ```
+- **Lỗi không cập nhật giao diện hoặc lỗi gọi nhầm API cũ**:
+  Do Next.js lưu cache biến môi trường vào lúc build (như `NEXT_PUBLIC_API_BASE_URL`). Nếu bạn sửa file `.env`, bạn bắt buộc phải chạy lệnh rebuild `docker compose up -d --build web`.
 
-Useful commands:
+---
 
+Các lệnh quản lý hữu ích khác:
 ```bash
+# Xem log hệ thống
 docker compose logs -f web
+docker compose logs -f api
+
+# Dừng toàn bộ hệ thống
 docker compose down
 ```
 

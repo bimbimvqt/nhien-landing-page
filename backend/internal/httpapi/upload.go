@@ -67,8 +67,8 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use internal endpoint (host-minio:9000) which is accessible within Docker network
-	s3Endpoint := getEnv("CDN_S3_INTERNAL_ENDPOINT", getEnv("CDN_S3_ENDPOINT", "http://localhost:9000"))
+	// Use CDN endpoint
+	s3Endpoint := getEnv("CDN_S3_ENDPOINT", "http://localhost:9000")
 	s3Endpoint = strings.TrimRight(s3Endpoint, "/")
 	uploadURL := fmt.Sprintf("%s/%s/%s", s3Endpoint, bucketName, filePath)
 
