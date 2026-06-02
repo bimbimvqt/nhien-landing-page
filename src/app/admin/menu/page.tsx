@@ -58,6 +58,7 @@ import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { getProxiedImageUrl } from "@/lib/image-proxy";
 import { fetchAdminApi } from '@/lib/adminApi';
+import { ImageCropperDialog } from "@/components/admin/ImageCropperDialog";
 
 const PRODUCT_IMAGE_BUCKET = "product-images";
 const DEFAULT_CATEGORIES: Category[] = [
@@ -101,6 +102,10 @@ const MenuPage = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("Tất cả");
+
+  // Cropper state
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [cropperImageUrl, setCropperImageUrl] = useState("");
 
   // Form state
   const [formData, setFormData] = useState({
@@ -186,6 +191,7 @@ const MenuPage = () => {
     setUploadingImage(false);
     setSelectedImageFile(null);
     setImagePreviewUrl("");
+    setCropperOpen(false);
   };
 
   const handleImageSelect = (file: File) => {
@@ -194,13 +200,34 @@ const MenuPage = () => {
       return;
     }
 
+    setCropperImageUrl(URL.createObjectURL(file));
+    setCropperOpen(true);
+  };
+
+  const handleCropComplete = (croppedBlob: Blob) => {
+    const file = new File([croppedBlob], "cropped.jpg", { type: "image/jpeg" });
+    
     if (imagePreviewUrl.startsWith("blob:")) {
       URL.revokeObjectURL(imagePreviewUrl);
     }
 
     setImageUploadError(null);
     setSelectedImageFile(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
+    setImagePreviewUrl(URL.createObjectURL(croppedBlob));
+    setCropperOpen(false);
+    
+    if (cropperImageUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(cropperImageUrl);
+    }
+    setCropperImageUrl("");
+  };
+
+  const handleCropClose = () => {
+    setCropperOpen(false);
+    if (cropperImageUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(cropperImageUrl);
+    }
+    setCropperImageUrl("");
   };
 
   const clearSelectedImage = () => {
@@ -1173,6 +1200,15 @@ const MenuPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {cropperOpen && (
+        <ImageCropperDialog
+          isOpen={cropperOpen}
+          onClose={handleCropClose}
+          imageUrl={cropperImageUrl}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 };
