@@ -136,7 +136,7 @@ export default function HeroSettingsPage() {
     formData.append('file', selectedImageFile);
     formData.append('folder', 'hero');
 
-    const response = await fetch('/api/admin/upload', {
+    const response = await fetchAdminApi('/api/admin/upload', {
       method: 'POST',
       body: formData,
     });

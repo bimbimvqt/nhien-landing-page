@@ -227,7 +227,7 @@ const MenuPage = () => {
     payload.append('file', selectedImageFile);
     payload.append('folder', 'menu');
 
-    const response = await fetch('/api/admin/upload', {
+    const response = await fetchAdminApi('/api/admin/upload', {
       method: 'POST',
       body: payload,
     });
