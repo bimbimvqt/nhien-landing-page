@@ -20,6 +20,8 @@ import {
   Gift,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -80,16 +82,14 @@ const HoursSettingsPage = () => {
   const [formData, setFormData] = useState<StoreSettingsForm>(createDefaultForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [currentSettings, setCurrentSettings] = useState<any>(null);
+
 
   const fetchSettings = async () => {
     setLoading(true);
-    setMessage(null);
-    setError(null);
 
     try {
+
       const res = await fetchAdminApi('/api/admin/store-settings');
       if (!res.ok) throw new Error('Failed to fetch settings');
       const data = await res.json();
@@ -107,8 +107,9 @@ const HoursSettingsPage = () => {
         reward_tasks: settings.reward_tasks || [],
       });
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Không thể tải cài đặt');
     } finally {
+
       setLoading(false);
     }
   };
@@ -140,9 +141,10 @@ const HoursSettingsPage = () => {
       })
       .catch((err) => {
         if (!isActive) return;
-        setError(err.message);
+        toast.error(err.message || 'Không thể tải cài đặt');
         setLoading(false);
       });
+
 
     return () => {
       isActive = false;
@@ -154,9 +156,8 @@ const HoursSettingsPage = () => {
     value: StoreSettingsForm[Key],
   ) => {
     setFormData((current) => ({ ...current, [key]: value }));
-    setMessage(null);
-    setError(null);
   };
+
 
   const updateMapEmbedUrl = (value: string) => {
     updateField('map_embed_url', extractGoogleMapsEmbedUrl(value));
@@ -173,25 +174,22 @@ const HoursSettingsPage = () => {
         hourIndex === index ? { ...hour, [key]: value } : hour,
       ),
     }));
-    setMessage(null);
-    setError(null);
   };
+
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const mapEmbedUrl = getGoogleMapsEmbedUrl(formData.map_embed_url);
 
     if (formData.map_embed_url?.trim() && !mapEmbedUrl) {
-      setMessage(null);
-      setError('Link bản đồ chưa đúng. Hãy dùng URL trong phần Nhúng bản đồ của Google Maps, bắt đầu bằng https://www.google.com/maps/embed.');
+      toast.error('Link bản đồ chưa đúng. Hãy dùng URL trong phần Nhúng bản đồ của Google Maps, bắt đầu bằng https://www.google.com/maps/embed.');
       return;
     }
 
     setSaving(true);
-    setMessage(null);
-    setError(null);
 
     try {
+
       const updateRes = await fetchAdminApi('/api/admin/store-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -214,13 +212,14 @@ const HoursSettingsPage = () => {
         throw new Error(errData.error || 'Failed to update settings');
       }
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Lỗi khi lưu cấu hình');
       setSaving(false);
       return;
     }
 
-    setMessage('Đã lưu cài đặt cửa hàng.');
+    toast.success('Đã lưu cài đặt cửa hàng.');
     setSaving(false);
+
   };
 
   const [isRevertConfirmOpen, setIsRevertConfirmOpen] = useState(false);
@@ -240,20 +239,20 @@ const HoursSettingsPage = () => {
         required_tasks_to_claim: settings.required_tasks_to_claim || 2,
         reward_tasks: settings.reward_tasks || [],
       });
-      setMessage('Đã khôi phục các thay đổi về giá trị đang lưu trên database.');
-      setError(null);
+      toast.success('Đã khôi phục các thay đổi về giá trị đang lưu trên database.');
     } else {
-      setError('Chưa tải được cấu hình hiện tại để khôi phục.');
+      toast.error('Chưa tải được cấu hình hiện tại để khôi phục.');
     }
+
     setIsRevertConfirmOpen(false);
   };
 
   const handleResetDefaults = () => {
     setFormData(createDefaultForm());
-    setMessage('Đã đưa biểu mẫu về giá trị mặc định của hệ thống. Nhấp "Lưu tất cả thay đổi" để áp dụng lên Supabase.');
-    setError(null);
+    toast.info('Đã đưa biểu mẫu về giá trị mặc định của hệ thống. Nhấp "Lưu tất cả thay đổi" để áp dụng lên Supabase.');
     setIsFactoryConfirmOpen(false);
   };
+
 
   const mapPreviewUrl = getGoogleMapsEmbedUrl(formData.map_embed_url);
   const hasMapValue = Boolean(formData.map_embed_url?.trim());
@@ -292,18 +291,7 @@ const HoursSettingsPage = () => {
         </div>
       </div>
 
-      {(message || error) && (
-        <div
-          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold ${
-            error
-              ? 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300'
-              : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-          }`}
-        >
-          {error ? <ShieldCheck className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-          {error || message}
-        </div>
-      )}
+
 
       <Tabs defaultValue="hours" className="w-full space-y-6">
         <TabsList className="inline-flex h-auto w-full flex-wrap justify-start rounded-2xl border border-border/50 bg-muted p-1 sm:w-auto">

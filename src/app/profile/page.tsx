@@ -5,17 +5,13 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
-  Gift,
   Heart,
   History,
   LayoutDashboard,
   Loader2,
   Mail,
   ShieldCheck,
-  Sparkles,
-  Star,
   TicketPercent,
-  Trophy,
   UserRound,
 } from "lucide-react";
 import Image from "next/image";
@@ -25,8 +21,15 @@ import React, { useEffect, useState } from "react";
 import { SeraGoogleLoginForm } from "@/components/auth/SeraGoogleLoginForm";
 import Navbar from "@/components/landing/Navbar";
 import { SeraButton, SeraLinkButton } from "@/components/sera/button";
-import { VerifyBadge, VerifyIcon, FloatingVerifyBadge } from "@/components/sera/verify-badge";
-import { getAuthRedirectUrl, getUserAvatarUrl, getUserDisplayName, isAdminUser } from "@/lib/auth";
+import { MemberTierCard } from "@/components/sera/member-tier-card";
+import { FloatingVerifyBadge } from "@/components/sera/verify-badge";
+
+import {
+  getAuthRedirectUrl,
+  getUserAvatarUrl,
+  getUserDisplayName,
+  isAdminUser,
+} from "@/lib/auth";
 import { REWARD_TASKS, type RewardTaskKey } from "@/lib/customerEngagement";
 import { getProxiedImageUrl } from "@/lib/image-proxy";
 import { DEFAULT_PRODUCT_IMAGE } from "@/lib/images";
@@ -35,10 +38,12 @@ import type {
   Favorite,
   LoyaltyAccount,
   LoyaltyTransaction,
+  MemberTiersSettings,
   Product,
   Promotion,
   PromotionClaim,
 } from "@/types";
+
 
 type FavoriteWithProduct = Favorite & {
   product: Product | null;
@@ -66,20 +71,29 @@ export default function ProfilePage() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<FavoriteWithProduct[]>([]);
   const [claims, setClaims] = useState<ClaimWithPromotion[]>([]);
-  const [completedTaskKeys, setCompletedTaskKeys] = useState<RewardTaskKey[]>([]);
+  const [completedTaskKeys, setCompletedTaskKeys] = useState<RewardTaskKey[]>(
+    [],
+  );
   const [rewardTasks, setRewardTasks] = useState(REWARD_TASKS);
-  const [loyaltyAccount, setLoyaltyAccount] = useState<LoyaltyAccount | null>(null);
-  const [loyaltyTransactions, setLoyaltyTransactions] = useState<LoyaltyTransaction[]>([]);
+  const [loyaltyAccount, setLoyaltyAccount] = useState<LoyaltyAccount | null>(
+    null,
+  );
+  const [loyaltyTransactions, setLoyaltyTransactions] = useState<
+    LoyaltyTransaction[]
+  >([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [memberTiers, setMemberTiers] = useState<MemberTiersSettings | null>(
+    null,
+  );
 
   const userName = getUserDisplayName(user);
   const avatarUrl = getUserAvatarUrl(user);
   const isAdmin = isAdminUser(user);
-  const memberCode = user?.id.slice(0, 8).toUpperCase() || '--------';
+  const memberCode = user?.id.slice(0, 8).toUpperCase() || "--------";
   const memberQrUrl = user
     ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`nhien-member:${user.id}`)}`
-    : '';
+    : "";
 
   const getBadgeType = (tier: string): "basic" | "gold" | "premium" => {
     if (tier === "Gold") return "premium";
@@ -87,77 +101,88 @@ export default function ProfilePage() {
     return "basic";
   };
 
-  const loadCustomerData = React.useCallback(async (currentUser: User | null) => {
-    if (!currentUser) {
-      setFavorites([]);
-      setClaims([]);
-      setCompletedTaskKeys([]);
-      setLoyaltyAccount(null);
-      setLoyaltyTransactions([]);
-      return;
-    }
-
-    setProfileLoading(true);
-    setProfileError(null);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('No session');
-
-      // Update profile first
-      const profileRes = await fetch('/api/me/profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          display_name: getUserDisplayName(currentUser),
-          email: currentUser.email || ''
-        })
-      });
-
-      if (!profileRes.ok) {
-        console.error('Failed to update profile');
+  const loadCustomerData = React.useCallback(
+    async (currentUser: User | null) => {
+      if (!currentUser) {
+        setFavorites([]);
+        setClaims([]);
+        setCompletedTaskKeys([]);
+        setLoyaltyAccount(null);
+        setLoyaltyTransactions([]);
+        return;
       }
 
-      // Fetch store settings for tasks list
-      let tasksList = REWARD_TASKS;
+      setProfileLoading(true);
+      setProfileError(null);
+
       try {
-        const settingsRes = await fetch('/api/admin/store-settings');
-        if (settingsRes.ok) {
-          const settingsData = await settingsRes.json();
-          if (settingsData && settingsData.reward_tasks) {
-            tasksList = settingsData.reward_tasks;
-            setRewardTasks(tasksList);
-          }
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) throw new Error("No session");
+
+        // Update profile first
+        const profileRes = await fetch("/api/me/profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            display_name: getUserDisplayName(currentUser),
+            email: currentUser.email || "",
+          }),
+        });
+
+        if (!profileRes.ok) {
+          console.error("Failed to update profile");
         }
-      } catch (e) {
-        console.error('Failed to fetch custom tasks:', e);
+
+        // Fetch store settings for tasks list and member tiers
+        let tasksList = REWARD_TASKS;
+        try {
+          const settingsRes = await fetch("/api/store-settings");
+          if (settingsRes.ok) {
+            const settingsData = await settingsRes.json();
+            if (settingsData && settingsData.reward_tasks) {
+              tasksList = settingsData.reward_tasks;
+              setRewardTasks(tasksList);
+            }
+            if (settingsData && settingsData.member_tiers) {
+              setMemberTiers(settingsData.member_tiers);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch custom tasks:", e);
+        }
+
+        // Fetch engagement
+        const res = await fetch("/api/me/engagement", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) throw new Error("Failed to fetch engagement data");
+
+        const data = await res.json();
+
+        setFavorites(data.favorites || []);
+        setClaims(data.claims || []);
+        setCompletedTaskKeys(
+          (data.completed_tasks || []).filter(
+            (key: any): key is RewardTaskKey =>
+              tasksList.some((task) => task.key === key),
+          ),
+        );
+        setLoyaltyAccount(data.loyalty_account || null);
+        setLoyaltyTransactions(data.loyalty_transactions || []);
+      } catch (e: any) {
+        console.error(e);
+        setProfileError("Có lỗi xảy ra khi tải dữ liệu thành viên.");
       }
 
-      // Fetch engagement
-      const res = await fetch('/api/me/engagement', {
-        headers: { 'Authorization': `Bearer ${session.access_token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch engagement data');
-
-      const data = await res.json();
-      
-      setFavorites(data.favorites || []);
-      setClaims(data.claims || []);
-      setCompletedTaskKeys((data.completed_tasks || []).filter((key: any): key is RewardTaskKey =>
-        tasksList.some((task) => task.key === key)
-      ));
-      setLoyaltyAccount(data.loyalty_account || null);
-      setLoyaltyTransactions(data.loyalty_transactions || []);
-    } catch (e: any) {
-      console.error(e);
-      setProfileError('Có lỗi xảy ra khi tải dữ liệu thành viên.');
-    }
-    
-    setProfileLoading(false);
-  }, []);
+      setProfileLoading(false);
+    },
+    [],
+  );
 
   useEffect(() => {
     let activeUserId: string | null = null;
@@ -170,25 +195,23 @@ export default function ProfilePage() {
       }
       if (!userId) return;
 
-      const channel = supabase
-        .channel(`realtime:profile_claims_${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'promotion_claims',
-            filter: `user_id=eq.${userId}`,
-          },
-          () => {
-            // Re-fetch with full user data
-            supabase.auth.getUser().then(({ data }) => {
-              if (data.user?.id === userId) {
-                void loadCustomerData(data.user);
-              }
-            });
-          }
-        );
+      const channel = supabase.channel(`realtime:profile_claims_${userId}`).on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "promotion_claims",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          // Re-fetch with full user data
+          supabase.auth.getUser().then(({ data }) => {
+            if (data.user?.id === userId) {
+              void loadCustomerData(data.user);
+            }
+          });
+        },
+      );
       channel.subscribe();
       claimsSubscription = channel;
     };
@@ -347,6 +370,7 @@ export default function ProfilePage() {
                       size="sm"
                       position="bottom-right"
                       animate
+                      label={loyaltyAccount?.tier || "Member"}
                     />
                   </div>
 
@@ -369,16 +393,6 @@ export default function ProfilePage() {
                     Đã đăng nhập bằng Google
                   </div>
                 </div>
-
-                <div className="rounded-3xl border border-sera-ink/10 p-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-sera-muted">
-                    Vai trò
-                  </p>
-                  <p className="mt-2 text-lg font-black text-sera-ink">
-                    {isAdmin ? "Admin" : "User"}
-                  </p>
-                </div>
-
                 <div className="rounded-3xl border border-sera-ink/10 p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-sera-muted">
                     Mã thành viên
@@ -432,17 +446,6 @@ export default function ProfilePage() {
                     value={user.email || "-"}
                   />
                   <InfoTile
-                    icon={<ShieldCheck className="h-5 w-5" />}
-                    label="Quyền truy cập"
-                    value={isAdmin ? "Admin" : "User"}
-                  />
-                  <InfoTile
-                    icon={<UserRound className="h-5 w-5" />}
-                    label="User ID"
-                    value={user.id}
-                    compact
-                  />
-                  <InfoTile
                     icon={<CalendarDays className="h-5 w-5" />}
                     label="Đăng nhập gần nhất"
                     value={formatDate(user.last_sign_in_at)}
@@ -456,32 +459,12 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              <div className="grid gap-6 md:grid-cols-3">
-                <MemberStat
-                  icon={<Trophy className="h-5 w-5" />}
-                  label="Hạng thành viên"
-                  value={
-                    <div className="flex items-center gap-2">
-                      <span>{loyaltyAccount?.tier || "Member"}</span>
-                      <VerifyIcon
-                        type={getBadgeType(loyaltyAccount?.tier || "Member")}
-                        size="xs"
-                        animate
-                      />
-                    </div>
-                  }
-                />
-                <MemberStat
-                  icon={<Star className="h-5 w-5" />}
-                  label="Stamp hiện có"
-                  value={`${loyaltyAccount?.stamps || 0}/8`}
-                />
-                <MemberStat
-                  icon={<Gift className="h-5 w-5" />}
-                  label="Điểm tích lũy"
-                  value={`${loyaltyAccount?.points || 0}`}
-                />
-              </div>
+              <MemberTierCard
+                points={loyaltyAccount?.points || 0}
+                stamps={loyaltyAccount?.stamps || 0}
+                tier={loyaltyAccount?.tier || "Member"}
+                memberTiers={memberTiers}
+              />
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <ProfilePanel
@@ -504,7 +487,10 @@ export default function ProfilePage() {
                             <div className="absolute inset-0 bg-gradient-to-br from-sera-ember to-amber-500 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-300" />
                             <div className="relative w-full h-full rounded-full overflow-hidden border-4 border-sera-surface group-hover:border-sera-ember/10 transition-all duration-300 shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)] bg-sera-surface">
                               <Image
-                                src={getProxiedImageUrl(favorite.product?.image_url || DEFAULT_PRODUCT_IMAGE)}
+                                src={getProxiedImageUrl(
+                                  favorite.product?.image_url ||
+                                    DEFAULT_PRODUCT_IMAGE,
+                                )}
                                 alt={favorite.product?.name || "Món yêu thích"}
                                 fill
                                 sizes="80px"
@@ -522,7 +508,10 @@ export default function ProfilePage() {
                             </span>
                             {favorite.product?.price_s ? (
                               <span className="block mt-1.5 text-xs font-black text-sera-ember">
-                                {new Intl.NumberFormat('vi-VN').format(favorite.product.price_s)}đ
+                                {new Intl.NumberFormat("vi-VN").format(
+                                  favorite.product.price_s,
+                                )}
+                                đ
                               </span>
                             ) : null}
                           </div>
@@ -542,7 +531,10 @@ export default function ProfilePage() {
                 >
                   <div className="max-h-[350px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-sera-muted/25 scrollbar-track-transparent space-y-3">
                     {claims.map((claim) => (
-                      <div key={claim.id} className="rounded-3xl bg-sera-cream p-4 text-sm">
+                      <div
+                        key={claim.id}
+                        className="rounded-3xl bg-sera-cream p-4 text-sm"
+                      >
                         <span className="block font-black text-sera-ink">
                           {claim.promotion?.name || "Ưu đãi"}
                         </span>
@@ -553,7 +545,8 @@ export default function ProfilePage() {
                           Nhận lúc {formatDate(claim.claimed_at)}
                         </span>
                         <span className="mt-1 block font-bold text-sera-muted">
-                          Đã dùng {claim.redeemed_count || 0} lần · còn {claim.remaining_uses ?? 1} lượt
+                          Đã dùng {claim.redeemed_count || 0} lần · còn{" "}
+                          {claim.remaining_uses ?? 1} lượt
                         </span>
                         {claim.redeemed_at && (
                           <span className="mt-1 block font-bold text-sera-sage">
@@ -576,12 +569,23 @@ export default function ProfilePage() {
                   emptyText="Chưa hoàn thành nhiệm vụ nào"
                 >
                   <div className="max-h-[350px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-sera-muted/25 scrollbar-track-transparent space-y-3">
-                    {rewardTasks.filter((task) => completedTaskKeys.includes(task.key as RewardTaskKey)).map((task) => (
-                      <div key={task.key} className="rounded-3xl bg-sera-cream p-4 text-sm">
-                        <span className="block font-black text-sera-ink">{task.title}</span>
-                        <span className="mt-1 block text-sera-muted">{task.reward}</span>
-                      </div>
-                    ))}
+                    {rewardTasks
+                      .filter((task) =>
+                        completedTaskKeys.includes(task.key as RewardTaskKey),
+                      )
+                      .map((task) => (
+                        <div
+                          key={task.key}
+                          className="rounded-3xl bg-sera-cream p-4 text-sm"
+                        >
+                          <span className="block font-black text-sera-ink">
+                            {task.title}
+                          </span>
+                          <span className="mt-1 block text-sera-muted">
+                            {task.reward}
+                          </span>
+                        </div>
+                      ))}
                   </div>
                 </ProfilePanel>
 
@@ -595,13 +599,17 @@ export default function ProfilePage() {
                 >
                   <div className="max-h-[350px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-sera-muted/25 scrollbar-track-transparent space-y-3">
                     {loyaltyTransactions.map((transaction) => (
-                      <div key={transaction.id} className="rounded-3xl bg-sera-cream p-4 text-sm">
+                      <div
+                        key={transaction.id}
+                        className="rounded-3xl bg-sera-cream p-4 text-sm"
+                      >
                         <span className="block font-black text-sera-ink">
                           {transaction.note || "Cập nhật điểm"}
                         </span>
                         <span className="mt-1 block text-sera-muted">
                           {transaction.points > 0 ? "+" : ""}
-                          {transaction.points} điểm · {transaction.stamps > 0 ? "+" : ""}
+                          {transaction.points} điểm ·{" "}
+                          {transaction.stamps > 0 ? "+" : ""}
                           {transaction.stamps} stamp
                         </span>
                         <span className="mt-1 block text-sera-muted">
@@ -612,20 +620,6 @@ export default function ProfilePage() {
                   </div>
                 </ProfilePanel>
               </div>
-
-              <div className="rounded-[2rem] border border-sera-ember/20 bg-sera-ember/10 p-6">
-                <div className="flex gap-4">
-                  <Sparkles className="mt-1 h-5 w-5 shrink-0 text-sera-ember" />
-                  <div>
-                    <h3 className="font-black text-sera-ink">
-                      Stamp card đơn giản
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-sera-muted">
-                      Mô hình hiện tại đã sẵn sàng cho quán cộng stamp/điểm theo user. Bước tiếp theo là thêm màn hình cashier để quét QR hoặc nhập email/số điện thoại.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -634,27 +628,6 @@ export default function ProfilePage() {
   );
 }
 
-function MemberStat({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-[2rem] border border-sera-ink/10 bg-sera-surface p-5">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-sera-cream text-sera-ember">
-        {icon}
-      </div>
-      <p className="text-xs font-bold uppercase tracking-widest text-sera-muted">
-        {label}
-      </p>
-      <div className="mt-2 text-2xl font-black text-sera-ink">{value}</div>
-    </div>
-  );
-}
 
 function ProfilePanel({
   icon,

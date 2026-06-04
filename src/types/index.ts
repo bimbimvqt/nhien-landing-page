@@ -111,6 +111,27 @@ export interface RewardTask {
   active?: boolean;
 }
 
+export interface MemberTierConfig {
+  /** Minimum cumulative points to reach this tier */
+  points_threshold: number;
+  /** Discount percentage on total bill (0 = no discount) */
+  discount_percent: number;
+  /** Human-readable label e.g. "Giảm 5%" */
+  discount_label: string;
+}
+
+export interface MemberTiersSettings {
+  silver: MemberTierConfig;
+  gold: MemberTierConfig;
+  platinum: MemberTierConfig;
+}
+
+export const DEFAULT_MEMBER_TIERS: MemberTiersSettings = {
+  silver: { points_threshold: 50, discount_percent: 0, discount_label: '' },
+  gold: { points_threshold: 100, discount_percent: 5, discount_label: 'Giảm 5% tổng bill' },
+  platinum: { points_threshold: 200, discount_percent: 10, discount_label: 'Giảm 10% tổng bill' },
+};
+
 export interface StoreSettings {
   id: number;
   brand_name: string;
@@ -129,5 +150,6 @@ export interface StoreSettings {
   gallery: GalleryItem[] | null;
   required_tasks_to_claim?: number;
   reward_tasks?: RewardTask[] | null;
+  member_tiers?: MemberTiersSettings | null;
   updated_at: string;
 }

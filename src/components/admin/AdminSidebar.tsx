@@ -1,6 +1,5 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -11,8 +10,6 @@ import {
   Tag, 
   Settings, 
   ChevronLeft,
-  Moon,
-  Sun,
   Stamp,
   TicketCheck,
   BookOpen,
@@ -22,7 +19,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 
 // Import i18n
 import { useAdminLanguage } from "@/lib/adminLanguage";
@@ -40,9 +36,6 @@ const sidebarItems = [
   { name: "nav.hours", href: "/admin/hours", icon: Settings, category: "nav.system" },
 ];
 
-const subscribeToMounted = () => () => {};
-const getMountedSnapshot = () => true;
-const getServerMountedSnapshot = () => false;
 
 interface SidebarProps {
   isOpen: boolean;
@@ -54,13 +47,7 @@ interface SidebarProps {
 export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
-  const isMounted = useSyncExternalStore(
-    subscribeToMounted,
-    getMountedSnapshot,
-    getServerMountedSnapshot
-  );
-  const isDarkTheme = isMounted && theme === 'dark';
+
 
   // Consume i18n
   const { t } = useAdminLanguage();
@@ -164,19 +151,8 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
             </div>
           ))}
         </div>
-
         {/* Sidebar Footer */}
-        <div className="p-3 border-t border-sidebar-border space-y-2 bg-sidebar-background/50">
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn("w-full h-10 rounded-lg justify-start gap-3 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all", isCollapsed && "justify-center px-0")}
-            onClick={() => setTheme(isDarkTheme ? 'light' : 'dark')}
-          >
-            {isDarkTheme ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
-            {!isCollapsed && <span className="text-xs font-bold uppercase tracking-wider">{isDarkTheme ? t('hours.refresh').replace('Làm mới', 'Light Mode') : t('hours.refresh').replace('Làm mới', 'Dark Mode')}</span>}
-          </Button>
-
+        <div className="p-3 border-t border-sidebar-border bg-sidebar-background/50">
           <div className={cn("flex items-center gap-3 rounded-xl border border-sidebar-border shadow-sm transition-all overflow-hidden", isCollapsed ? "p-1.5 justify-center" : "px-3 py-2 bg-sidebar-background")}>
             <div className="w-8 h-8 rounded-lg bg-sidebar-accent border border-sidebar-border flex-shrink-0 flex items-center justify-center text-xs font-bold text-sidebar-foreground/60 shadow-inner">
               AD
@@ -184,7 +160,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
             {!isCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold text-sidebar-foreground truncate leading-none">Admin Nhiên</p>
-                <button 
+                <button
                   onClick={handleLogout}
                   className="text-[9px] text-rose-500 font-bold uppercase tracking-wider hover:text-rose-600 transition-colors mt-1"
                 >
@@ -193,7 +169,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
               </div>
             )}
             {isCollapsed && (
-              <button 
+              <button
                 onClick={handleLogout}
                 className="absolute inset-0 z-10 opacity-0 cursor-pointer"
                 title={t('header.logout')}
@@ -201,6 +177,7 @@ export function AdminSidebar({ isOpen, onClose, isCollapsed, setIsCollapsed }: S
             )}
           </div>
         </div>
+
       </aside>
     </>
   );

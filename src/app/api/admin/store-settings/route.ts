@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { getServerApiBaseUrl, getAdminApiHeaders, verifyUser } from '@/app/api/me/util';
 import { isAdminUser } from '@/lib/auth';
 
@@ -41,7 +42,12 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: errorText }, { status: res.status });
     }
     
+    
     const data = await res.json();
+    
+    // Invalidate Next.js cache so the landing page and profile page updates immediately
+    revalidatePath('/', 'layout');
+
     return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

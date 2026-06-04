@@ -35,7 +35,7 @@ func (s *Server) updateStoreSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) fetchStoreSettings(r *http.Request) (StoreSettings, error) {
 	var settings StoreSettings
 	err := s.db.QueryRow(r.Context(), `
-		select id, brand_name, hotline, address, facebook_url, instagram_url, map_embed_url, hero_image_url, opening_hours, about_image_url, about_title, about_description_1, about_description_2, about_stats, gallery, required_tasks_to_claim, reward_tasks, updated_at
+		select id, brand_name, hotline, address, facebook_url, instagram_url, map_embed_url, hero_image_url, opening_hours, about_image_url, about_title, about_description_1, about_description_2, about_stats, gallery, required_tasks_to_claim, reward_tasks, member_tiers, updated_at
 		from store_settings
 		where id = 1
 	`).Scan(
@@ -56,6 +56,7 @@ func (s *Server) fetchStoreSettings(r *http.Request) (StoreSettings, error) {
 		&settings.Gallery,
 		&settings.RequiredTasksToClaim,
 		&settings.RewardTasks,
+		&settings.MemberTiers,
 		&settings.UpdatedAt,
 	)
 	return settings, err
@@ -93,10 +94,11 @@ func (s *Server) saveStoreSettings(r *http.Request, input StoreSettings) (StoreS
 		    about_stats = $13,
 		    gallery = $14,
 		    required_tasks_to_claim = $15,
-		    reward_tasks = $16
+		    reward_tasks = $16,
+		    member_tiers = $17
 		where id = 1
-		returning id, brand_name, hotline, address, facebook_url, instagram_url, map_embed_url, hero_image_url, opening_hours, about_image_url, about_title, about_description_1, about_description_2, about_stats, gallery, required_tasks_to_claim, reward_tasks, updated_at
-	`, input.BrandName, input.Hotline, input.Address, input.FacebookURL, input.InstagramURL, input.MapEmbedURL, input.HeroImageURL, input.OpeningHours, input.AboutImageURL, input.AboutTitle, input.AboutDescription1, input.AboutDescription2, input.AboutStats, input.Gallery, input.RequiredTasksToClaim, input.RewardTasks).Scan(
+		returning id, brand_name, hotline, address, facebook_url, instagram_url, map_embed_url, hero_image_url, opening_hours, about_image_url, about_title, about_description_1, about_description_2, about_stats, gallery, required_tasks_to_claim, reward_tasks, member_tiers, updated_at
+	`, input.BrandName, input.Hotline, input.Address, input.FacebookURL, input.InstagramURL, input.MapEmbedURL, input.HeroImageURL, input.OpeningHours, input.AboutImageURL, input.AboutTitle, input.AboutDescription1, input.AboutDescription2, input.AboutStats, input.Gallery, input.RequiredTasksToClaim, input.RewardTasks, input.MemberTiers).Scan(
 		&settings.ID,
 		&settings.BrandName,
 		&settings.Hotline,
@@ -114,6 +116,7 @@ func (s *Server) saveStoreSettings(r *http.Request, input StoreSettings) (StoreS
 		&settings.Gallery,
 		&settings.RequiredTasksToClaim,
 		&settings.RewardTasks,
+		&settings.MemberTiers,
 		&settings.UpdatedAt,
 	)
 

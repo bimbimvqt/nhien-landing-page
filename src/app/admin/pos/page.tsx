@@ -20,7 +20,9 @@ import {
   Plus,
   ArrowLeft,
   RefreshCw,
+  Receipt,
 } from 'lucide-react';
+
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,7 +31,8 @@ import { Input } from '@/components/ui/input';
 import { QRScannerDialog } from '@/components/admin/QRScannerDialog';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
-import type { LoyaltyAccount, LoyaltyTransaction, PromotionClaim, Promotion } from '@/types';
+import type { LoyaltyAccount, LoyaltyTransaction, PromotionClaim, Promotion, MemberTiersSettings } from '@/types';
+
 
 const STAMPS_FOR_REWARD = 8;
 
@@ -87,8 +90,25 @@ export default function PosPage() {
   const [success, setSuccess] = useState<SuccessResult | null>(null);
   const [stampCount, setStampCount] = useState(1);
   const [pendingAction, setPendingAction] = useState<PosAction | null>(null);
+  const [memberTiers, setMemberTiers] = useState<MemberTiersSettings | null>(null);
+
+  React.useEffect(() => {
+    let isActive = true;
+    getAuthHeader().then(auth => {
+      fetch('/api/admin/store-settings', { headers: { Authorization: auth } })
+        .then(res => res.json())
+        .then(data => {
+           if (isActive && data.member_tiers) {
+             setMemberTiers(data.member_tiers);
+           }
+        })
+        .catch(console.error);
+    });
+    return () => { isActive = false; };
+  }, []);
 
   // ── Fetch user data ────────────────────────────────────────────────────────
+
   const loadUser = useCallback(async (rawQr: string) => {
     setError(null);
     setSuccess(null);
@@ -328,7 +348,14 @@ export default function PosPage() {
               processing={processing}
             />
 
+            {/* Bill Calculator */}
+            <BillCalculator 
+              tier={user.loyalty_account?.tier || 'Member'} 
+              memberTiers={memberTiers} 
+            />
+
             {/* Exchange reward */}
+
             {(user.loyalty_account?.stamps || 0) >= STAMPS_FOR_REWARD && (
               <ExchangeRewardCard
                 stamps={user.loyalty_account?.stamps || 0}
@@ -797,3 +824,88 @@ function ConfirmActionDialog({
     </div>
   );
 }
+
+function BillCalculator({
+  tier,
+  memberTiers,
+}: {
+  tier: string;
+  memberTiers: MemberTiersSettings | null;
+}) {
+  const [billAmount, setBillAmount] = useState<string>('');
+
+  const parsedBill = Number(billAmount) || 0;
+  
+  // Find discount percent for tier
+  let discountPercent = 0;
+  let discountLabel = '';
+  
+  if (memberTiers) {
+    const t = tier.toLowerCase();
+    if (t === 'gold') {
+      discountPercent = memberTiers.gold.discount_percent || 0;
+      discountLabel = memberTiers.gold.discount_label || '';
+    } else if (t === 'platinum') {
+      discountPercent = memberTiers.platinum.discount_percent || 0;
+      discountLabel = memberTiers.platinum.discount_label || '';
+    } else if (t === 'silver') {
+      discountPercent = memberTiers.silver.discount_percent || 0;
+      discountLabel = memberTiers.silver.discount_label || '';
+    }
+  }
+
+  const discountAmount = Math.floor(parsedBill * (discountPercent / 100));
+  const finalAmount = parsedBill - discountAmount;
+
+  return (
+    <Card className="overflow-hidden rounded-[28px] border-border/50 bg-card shadow-sm">
+      <CardHeader className="border-b border-border/50 p-6 pb-4">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Receipt className="h-5 w-5 text-primary" />
+          Tính Tiền & Ưu Đãi Hạng
+        </CardTitle>
+        <p className="text-sm text-muted-foreground mt-1">
+          Nhập tổng bill để tính số tiền khách cần thanh toán sau khi áp dụng giảm giá hạng {tier}.
+        </p>
+      </CardHeader>
+      <CardContent className="p-6 space-y-5">
+        <div>
+          <label className="text-xs font-bold text-muted-foreground mb-2 block">TỔNG BILL (VNĐ)</label>
+          <Input 
+            type="number"
+            value={billAmount} 
+            onChange={(e) => setBillAmount(e.target.value)}
+            placeholder="Ví dụ: 100000"
+            className="h-14 rounded-2xl text-lg font-black bg-muted/20 border-border/50"
+          />
+        </div>
+
+        {parsedBill > 0 && (
+          <div className="rounded-2xl bg-muted/30 p-5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex justify-between items-center text-sm font-semibold text-muted-foreground">
+              <span>Tổng tiền:</span>
+              <span>{parsedBill.toLocaleString('vi-VN')} đ</span>
+            </div>
+            {discountPercent > 0 && (
+              <div className="flex justify-between items-center text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                <span>Giảm hạng {tier} ({discountPercent}%):</span>
+                <span>-{discountAmount.toLocaleString('vi-VN')} đ</span>
+              </div>
+            )}
+            <div className="h-px bg-border/50 my-2" />
+            <div className="flex justify-between items-center text-lg font-black text-foreground">
+              <span>Khách thanh toán:</span>
+              <span className="text-primary">{finalAmount.toLocaleString('vi-VN')} đ</span>
+            </div>
+            {discountLabel && discountPercent > 0 && (
+              <p className="text-xs text-center font-bold text-emerald-600 dark:text-emerald-400 mt-3 bg-emerald-500/10 py-2 rounded-xl">
+                {discountLabel}
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+

@@ -8,6 +8,7 @@ export interface VerifyBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   showLabel?: boolean;
   animate?: boolean;
+  label?: string;
 }
 
 const BADGE_CONFIG = {
@@ -228,7 +229,7 @@ const SIZE_CONFIG = {
 };
 
 const VerifyBadge = React.forwardRef<HTMLDivElement, VerifyBadgeProps>(
-  ({ type, size = "md", showLabel = true, animate = true, className, ...props }, ref) => {
+  ({ type, size = "md", showLabel = true, animate = true, label, className, ...props }, ref) => {
     const config = BADGE_CONFIG[type];
     const sizeClasses = SIZE_CONFIG[size];
     const IconComponent = config.icon;
@@ -253,7 +254,7 @@ const VerifyBadge = React.forwardRef<HTMLDivElement, VerifyBadgeProps>(
         {...props}
       >
         <IconComponent className={sizeClasses.icon} />
-        {showLabel && <span className="font-semibold">{config.label}</span>}
+        {showLabel && <span className="font-semibold">{label || config.label}</span>}
       </div>
     );
   }

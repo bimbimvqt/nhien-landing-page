@@ -11,6 +11,8 @@ import {
   X,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -35,18 +37,16 @@ export default function HeroSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [currentSettings, setCurrentSettings] = useState<any>(null);
+
 
   const previewUrl = imagePreviewUrl || imageUrl.trim() || DEFAULT_HERO_BACKGROUND;
 
   const fetchHeroSettings = async () => {
     setLoading(true);
-    setError(null);
-    setMessage(null);
 
     try {
+
       const res = await fetchAdminApi('/api/admin/store-settings');
       if (!res.ok) {
         throw new Error('Failed to fetch settings');
@@ -59,8 +59,9 @@ export default function HeroSettingsPage() {
       setSelectedImageFile(null);
       setImagePreviewUrl('');
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Không thể tải cài đặt');
     } finally {
+
       setLoading(false);
     }
   };
@@ -85,9 +86,10 @@ export default function HeroSettingsPage() {
       })
       .catch((err) => {
         if (!isActive) return;
-        setError(err.message);
+        toast.error(err.message || 'Không thể tải cài đặt');
         setLoading(false);
       });
+
 
     return () => {
       isActive = false;
@@ -102,9 +104,10 @@ export default function HeroSettingsPage() {
 
   const handleImageSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setError('Vui lòng chọn tệp hình ảnh hợp lệ.');
+      toast.error('Vui lòng chọn tệp hình ảnh hợp lệ.');
       return;
     }
+
 
     if (imagePreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(imagePreviewUrl);
@@ -112,9 +115,8 @@ export default function HeroSettingsPage() {
 
     setSelectedImageFile(file);
     setImagePreviewUrl(URL.createObjectURL(file));
-    setMessage(null);
-    setError(null);
   };
+
 
   const clearSelectedImage = () => {
     if (imagePreviewUrl.startsWith('blob:')) {
@@ -123,9 +125,8 @@ export default function HeroSettingsPage() {
 
     setSelectedImageFile(null);
     setImagePreviewUrl('');
-    setMessage(null);
-    setError(null);
   };
+
 
   const uploadSelectedImage = async () => {
     if (!selectedImageFile) {
@@ -153,18 +154,18 @@ export default function HeroSettingsPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
-    setError(null);
-    setMessage(null);
 
     let nextImageUrl: string | null;
+
 
     try {
       nextImageUrl = await uploadSelectedImage();
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Không thể upload ảnh Hero.');
+      toast.error(error instanceof Error ? error.message : 'Không thể upload ảnh Hero.');
       setSaving(false);
       return;
     }
+
 
     try {
       const updateRes = await fetchAdminApi('/api/admin/store-settings', {
@@ -181,25 +182,26 @@ export default function HeroSettingsPage() {
         throw new Error(errData.error || 'Failed to update settings');
       }
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Lỗi khi lưu cấu hình');
       setSaving(false);
       return;
     }
+
 
     const savedUrl = nextImageUrl || DEFAULT_HERO_BACKGROUND;
     setImageUrl(savedUrl);
     setSavedImageUrl(savedUrl);
     clearSelectedImage();
-    setMessage('Đã lưu ảnh Hero mới.');
+    toast.success('Đã lưu ảnh Hero mới.');
     setSaving(false);
   };
+
 
   const handleResetDefault = () => {
     clearSelectedImage();
     setImageUrl(DEFAULT_HERO_BACKGROUND);
-    setMessage(null);
-    setError(null);
   };
+
 
   return (
     <div className="space-y-8 pb-10">
@@ -313,26 +315,16 @@ export default function HeroSettingsPage() {
                 onChange={(event) => {
                   setImageUrl(event.target.value);
                   clearSelectedImage();
-                  setMessage(null);
-                  setError(null);
                 }}
+
                 placeholder="https://images.unsplash.com/..."
                 disabled={loading || saving}
                 className="h-14 rounded-2xl border-border bg-muted/20 px-5 text-base font-medium text-foreground transition-all focus-visible:border-border focus-visible:bg-background focus-visible:ring-primary/10"
               />
             </div>
 
-            {error && (
-              <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-600 dark:text-rose-300">
-                {error}
-              </div>
-            )}
 
-            {message && (
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                {message}
-              </div>
-            )}
+
           </CardContent>
         </Card>
 

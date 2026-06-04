@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+export const fetchCache = 'force-no-store';
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: "Nhiên CàFe - Chạm vào sự thư giãn",
   description: "Cà phê mang đi - Trải nghiệm sự giản dị và nhẹ nhàng tại Nhiên CàFe.",
@@ -23,6 +26,8 @@ export const metadata: Metadata = {
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { RedeemSuccessPopup } from "@/components/landing/RedeemSuccessPopup";
+import { Toaster } from "sonner";
+
 
 export default function RootLayout({
   children,
@@ -34,12 +39,22 @@ export default function RootLayout({
       <body className="antialiased">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="dark"
           disableTransitionOnChange
         >
+
           {children}
           <RedeemSuccessPopup />
+          <Toaster
+            theme="dark"
+            position="top-right"
+            richColors
+            closeButton
+            toastOptions={{
+              style: { fontFamily: 'inherit' },
+            }}
+          />
+
         </ThemeProvider>
       </body>
     </html>

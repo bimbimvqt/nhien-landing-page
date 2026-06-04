@@ -12,6 +12,8 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+
+import { toast } from 'sonner';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,10 +41,8 @@ export default function AboutSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadWarning, setUploadWarning] = useState<string | null>(null);
   const [currentSettings, setCurrentSettings] = useState<any>(null);
+
 
   // Form state
   const [imageUrl, setImageUrl] = useState('');
@@ -58,8 +58,8 @@ export default function AboutSettingsPage() {
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
+
       const res = await fetchAdminApi('/api/admin/store-settings');
       if (!res.ok) throw new Error('Không thể tải cài đặt');
       const data = await res.json();
@@ -74,8 +74,9 @@ export default function AboutSettingsPage() {
         setStats(DEFAULT_ABOUT_STATS);
       }
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Không thể tải cài đặt.');
     }
+
     setLoading(false);
   }, []);
 
@@ -94,8 +95,8 @@ export default function AboutSettingsPage() {
   const handleUploadImage = async (): Promise<string | null> => {
     if (!selectedImageFile) return imageUrl || null;
     setUploading(true);
-    setUploadWarning(null);
     try {
+
       const formData = new FormData();
       formData.append('file', selectedImageFile);
       formData.append('bucket', ABOUT_IMAGE_BUCKET);
@@ -108,12 +109,10 @@ export default function AboutSettingsPage() {
       const data = await res.json();
       return data.url as string;
     } catch {
-      // Non-blocking: warn user but keep saving with existing URL
-      setUploadWarning(
-        '⚠️ Upload ảnh không thành công (CDN không accessible từ môi trường dev). Nội dung khác vẫn được lưu. Bạn có thể dán URL ảnh thủ công vào ô "URL hình ảnh".',
-      );
+      toast.warning('⚠️ Upload ảnh không thành công (CDN không accessible từ môi trường dev). Nội dung khác vẫn được lưu. Bạn có thể dán URL ảnh thủ công.');
       return imageUrl || null;
     } finally {
+
       setUploading(false);
     }
   };
@@ -122,11 +121,8 @@ export default function AboutSettingsPage() {
     e.preventDefault();
     if (!currentSettings) return;
     setSaving(true);
-    setError(null);
-    setMessage(null);
-    setUploadWarning(null);
-
     try {
+
       const uploadedUrl = await handleUploadImage();
 
       const payload = {
@@ -154,10 +150,11 @@ export default function AboutSettingsPage() {
       setImageUrl(saved.about_image_url || '');
       setSelectedImageFile(null);
       setImagePreviewUrl('');
-      setMessage('✅ Đã lưu thành công!');
+      toast.success('Đã lưu thành công nội dung "Về Chúng Tôi"!');
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Lưu thất bại.');
     }
+
     setSaving(false);
   };
 
@@ -198,22 +195,7 @@ export default function AboutSettingsPage() {
         </div>
       ) : (
         <form onSubmit={handleSave} className="space-y-8">
-          {/* Feedback messages */}
-          {message && (
-            <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-6 py-4 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-              {message}
-            </div>
-          )}
-          {uploadWarning && (
-            <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-6 py-4 text-sm font-medium text-amber-700 dark:text-amber-400">
-              {uploadWarning}
-            </div>
-          )}
-          {error && (
-            <div className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-6 py-4 text-sm font-semibold text-rose-700 dark:text-rose-400">
-              ⚠️ {error}
-            </div>
-          )}
+
 
           {/* Image Section */}
           <Card className="border-border/50 shadow-sm overflow-hidden rounded-[24px] bg-card">

@@ -11,6 +11,8 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -31,21 +33,20 @@ const GALLERY_IMAGE_BUCKET = 'product-images';
 export default function GallerySettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [currentSettings, setCurrentSettings] = useState<any>(null);
+
 
   // Gallery items state
   const [items, setItems] = useState<GalleryItem[]>(DEFAULT_GALLERY);
 
   // Image upload state for specific index
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
-  const [uploadWarning, setUploadWarning] = useState<string | null>(null);
+
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
+
       const res = await fetchAdminApi('/api/admin/store-settings');
       if (!res.ok) throw new Error('Không thể tải cài đặt');
       const data = await res.json();
@@ -56,8 +57,9 @@ export default function GallerySettingsPage() {
         setItems(DEFAULT_GALLERY);
       }
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Không thể tải cài đặt gallery.');
     }
+
     setLoading(false);
   }, []);
 
@@ -70,7 +72,6 @@ export default function GallerySettingsPage() {
     if (!file) return;
 
     setUploadingIndex(index);
-    setUploadWarning(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -85,10 +86,9 @@ export default function GallerySettingsPage() {
       
       updateItemField(index, 'imageUrl', data.url as string);
     } catch {
-      setUploadWarning(
-        '⚠️ Không thể upload ảnh lên CDN (môi trường dev không tiếp cận). Bạn hãy dán URL ảnh trực tiếp vào ô URL ở dưới.'
-      );
+      toast.warning('⚠️ Không thể upload ảnh lên CDN (môi trường dev). Hãy dán URL ảnh trực tiếp vào ô URL.');
     } finally {
+
       setUploadingIndex(null);
     }
   };
@@ -117,10 +117,6 @@ export default function GallerySettingsPage() {
     e.preventDefault();
     if (!currentSettings) return;
     setSaving(true);
-    setError(null);
-    setMessage(null);
-    setUploadWarning(null);
-
     try {
       const validItems = items.filter((item) => item.imageUrl.trim() && item.title.trim());
       if (validItems.length === 0) {
@@ -148,10 +144,11 @@ export default function GallerySettingsPage() {
       if (Array.isArray(saved.gallery) && saved.gallery.length > 0) {
         setItems(saved.gallery);
       }
-      setMessage('✅ Lưu thành công các hình ảnh Gallery!');
+      toast.success('Đã lưu thành công các hình ảnh Gallery! 🆾');
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message || 'Lưu thất bại.');
     }
+
     setSaving(false);
   };
 
@@ -185,21 +182,7 @@ export default function GallerySettingsPage() {
         </div>
       ) : (
         <form onSubmit={handleSave} className="space-y-8">
-          {message && (
-            <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-6 py-4 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-              {message}
-            </div>
-          )}
-          {uploadWarning && (
-            <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-6 py-4 text-sm font-medium text-amber-700 dark:text-amber-400">
-              {uploadWarning}
-            </div>
-          )}
-          {error && (
-            <div className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-6 py-4 text-sm font-semibold text-rose-700 dark:text-rose-400">
-              ⚠️ {error}
-            </div>
-          )}
+
 
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-foreground">Danh sách ảnh Carousel</h2>

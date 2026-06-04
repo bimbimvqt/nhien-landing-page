@@ -13,6 +13,9 @@ import {
   QrCode,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { QRScannerDialog } from '@/components/admin/QRScannerDialog';
@@ -41,9 +44,8 @@ export default function RedeemPage() {
   const [claims, setClaims] = useState<ClaimWithDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
 
   const searchClaims = async (codeToSearch?: string) => {
     const normalizedCode = (codeToSearch || code).trim().toUpperCase();
@@ -53,13 +55,11 @@ export default function RedeemPage() {
     }
 
     if (!normalizedCode) {
-      setMessage('Nhập mã khuyến mãi trước khi tìm.');
+      toast.warning('Nhập mã khuyến mãi trước khi tìm.');
       return;
     }
 
     setLoading(true);
-    setError(null);
-    setMessage(null);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -72,7 +72,7 @@ export default function RedeemPage() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: 'Lỗi tìm kiếm' }));
-        setError(errData.error || 'Không thể tìm kiếm mã.');
+        toast.error(errData.error || 'Không thể tìm kiếm mã.');
         setClaims([]);
         setLoading(false);
         return;
@@ -80,9 +80,13 @@ export default function RedeemPage() {
 
       const rows = (await res.json()) as ClaimWithDetails[];
       setClaims(rows);
-      setMessage(rows.length === 0 ? 'Không tìm thấy claim nào cho mã này.' : `Tìm thấy ${rows.length} lượt nhận mã.`);
+      if (rows.length === 0) {
+        toast.info('Không tìm thấy claim nào cho mã này.');
+      } else {
+        toast.success(`Tìm thấy ${rows.length} lượt nhận mã.`);
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Lỗi không xác định');
+      toast.error(e instanceof Error ? e.message : 'Lỗi không xác định');
       setClaims([]);
     }
 
@@ -91,7 +95,7 @@ export default function RedeemPage() {
 
   const redeemClaim = async (claim: ClaimWithDetails) => {
     if ((claim.remaining_uses ?? 0) <= 0) {
-      setMessage('Mã này đã hết lượt sử dụng cho user này.');
+      toast.warning('Mã này đã hết lượt sử dụng cho user này.');
       return;
     }
 
@@ -99,13 +103,11 @@ export default function RedeemPage() {
       claim.promotion?.max_total_redemptions &&
       (claim.promotion.usage_count || 0) >= claim.promotion.max_total_redemptions
     ) {
-      setMessage('Mã này đã đạt tổng lượt áp dụng tối đa.');
+      toast.warning('Mã này đã đạt tổng lượt áp dụng tối đa.');
       return;
     }
 
     setRedeemingId(claim.id);
-    setError(null);
-    setMessage(null);
 
     const { data: { session } } = await supabase.auth.getSession();
 
@@ -120,7 +122,7 @@ export default function RedeemPage() {
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ error: 'Lỗi không xác định' }));
-      setError(errData.error || 'Không thể áp dụng mã.');
+      toast.error(errData.error || 'Không thể áp dụng mã.');
       setRedeemingId(null);
       return;
     }
@@ -147,14 +149,14 @@ export default function RedeemPage() {
           : item,
       ),
     );
-    setMessage('Đã áp dụng mã và cập nhật lượt sử dụng.');
     setRedeemingId(null);
-    window.alert('Áp dụng mã thành công!');
+
+    toast.success('Áp dụng mã thành công! 🎉');
   };
 
   const copyUserId = async (userId: string) => {
     await navigator.clipboard.writeText(userId);
-    setMessage('Đã copy user id.');
+    toast.info('Đã copy User ID.');
   };
 
   return (
@@ -231,19 +233,7 @@ export default function RedeemPage() {
             </div>
           </div>
 
-          {(message || error) && (
-            <div
-              className={cn(
-                'flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold',
-                error
-                  ? 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-300'
-                  : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-              )}
-            >
-              {error ? <XCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-              {error || message}
-            </div>
-          )}
+
         </CardContent>
       </Card>
 

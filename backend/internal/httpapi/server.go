@@ -64,8 +64,10 @@ type StoreSettings struct {
 	AboutDescription2  *string         `json:"about_description_2"`
 	AboutStats         json.RawMessage `json:"about_stats"`
 	Gallery            json.RawMessage `json:"gallery"`
-	RewardTasks        json.RawMessage `json:"reward_tasks"`
-	RequiredTasksToClaim int          `json:"required_tasks_to_claim"`
+	RewardTasks          json.RawMessage `json:"reward_tasks"`
+	MemberTiers          json.RawMessage `json:"member_tiers"`
+	RequiredTasksToClaim int             `json:"required_tasks_to_claim"`
+
 	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
